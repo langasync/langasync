@@ -1,6 +1,12 @@
 """Core abstractions and base classes for langasync."""
 
-from .exceptions import LangAsyncError, ProviderError, ConfigurationError, UnsupportedChainError
+from .exceptions import (
+    LangAsyncError,
+    ProviderError,
+    ConfigurationError,
+    UnsupportedChainError,
+    UnsupportedProviderError,
+)
 from .batch_api import (
     BatchApiAdapterInterface,
     BatchApiJob,
@@ -18,6 +24,7 @@ __all__ = [
     "ProviderError",
     "ConfigurationError",
     "UnsupportedChainError",
+    "UnsupportedProviderError",
     "BatchApiAdapterInterface",
     "BatchApiJob",
     "BatchJob",

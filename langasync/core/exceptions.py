@@ -41,3 +41,9 @@ class UnsupportedChainError(LangAsyncError):
     """
 
     pass
+
+
+class UnsupportedProviderError(LangAsyncError):
+    """Exception raised when a provider is not supported or not recognized."""
+
+    pass

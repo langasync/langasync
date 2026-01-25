@@ -4,6 +4,7 @@ from typing import Any
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.runnables import Runnable
 
+from langasync.core.exceptions import UnsupportedProviderError
 from langasync.core.batch_api import (
     BatchApiAdapterInterface,
     BatchApiJob,
@@ -19,7 +20,7 @@ def _get_adapter_from_provider(provider: Provider) -> BatchApiAdapterInterface:
     """Get the appropriate batch API adapter for a provider name."""
     adapter_cls = ADAPTER_REGISTRY.get(provider)
     if adapter_cls is None:
-        raise ValueError(f"Unknown provider: {provider}")
+        raise UnsupportedProviderError(f"Unknown provider: {provider}")
     return adapter_cls()
 
 
@@ -36,7 +37,7 @@ def _get_provider_from_model(model: BaseLanguageModel | None) -> Provider:
     elif "anthropic" in lc_path:
         return Provider.ANTHROPIC
 
-    raise ValueError(f"Cannot detect provider for model: {lc_id}")
+    raise UnsupportedProviderError(f"Cannot detect provider for model: {lc_id}")
 
 
 def _get_adapter_from_model(model: BaseLanguageModel | None) -> BatchApiAdapterInterface:
