@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 class NullLanguageModel(BaseModel):
     """Marker type indicating no language model is present in the chain."""
+
     pass
 
 

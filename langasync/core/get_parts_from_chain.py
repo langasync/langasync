@@ -4,8 +4,12 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from langchain_core.language_models import BaseLanguageModel
+from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import Runnable, RunnableSequence, RunnablePassthrough
-from langchain_core.runnables.base import RunnableBindingBase
+from langchain_core.runnables.base import RunnableBindingBase, RunnableEachBase
+from langchain_core.runnables.branch import RunnableBranch
+
+from langasync.core.exceptions import UnsupportedChainError
 
 
 @dataclass
@@ -33,13 +37,31 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
         ChainParts with the three components
 
     Raises:
-        NotImplementedError: If chain has multiple models
+        UnsupportedChainError: If chain has multiple models, retrievers, RunnableBranch, or RunnableEach
     """
     # Get steps from a RunnableSequence, or treat single runnable as one step
     if isinstance(chain, RunnableSequence):
         steps = list(chain.steps)
     else:
         steps = [chain]
+
+    # Check for unsupported components
+    for step in steps:
+        if _is_retriever(step):
+            raise UnsupportedChainError(
+                "Chains containing retrievers are not supported. "
+                "Retrievers should be executed separately before batch submission."
+            )
+        if _is_branching_runnable(step):
+            raise UnsupportedChainError(
+                "Chains containing RunnableBranch are not supported. "
+                "Branching logic may contain hidden models that cannot be analyzed."
+            )
+        if _is_each_runnable(step):
+            raise UnsupportedChainError(
+                "Chains containing RunnableEach are not supported. "
+                "RunnableEach may wrap models that cannot be analyzed."
+            )
 
     # Find all model indices
     model_indices: List[int] = []
@@ -49,7 +71,7 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
 
     # Validate: at most one model
     if len(model_indices) > 1:
-        raise NotImplementedError(
+        raise UnsupportedChainError(
             f"Chains with multiple models are not supported. Found {len(model_indices)} models."
         )
 
@@ -116,3 +138,59 @@ def _unwrap_to_model(runnable) -> Optional[BaseLanguageModel]:
 
     # Not a model
     return None
+
+
+def _is_retriever(runnable) -> bool:
+    """Check if a runnable is a retriever.
+
+    Args:
+        runnable: Any LangChain Runnable
+
+    Returns:
+        True if the runnable is a BaseRetriever, False otherwise
+    """
+    # Direct retriever
+    if isinstance(runnable, BaseRetriever):
+        return True
+
+    # Unwrap RunnableBindingBase to check if it wraps a retriever
+    if isinstance(runnable, RunnableBindingBase):
+        return _is_retriever(runnable.bound)
+
+    return False
+
+
+def _is_branching_runnable(runnable) -> bool:
+    """Check if a runnable is a RunnableBranch.
+
+    Args:
+        runnable: Any LangChain Runnable
+
+    Returns:
+        True if the runnable is a RunnableBranch, False otherwise
+    """
+    if isinstance(runnable, RunnableBranch):
+        return True
+
+    if isinstance(runnable, RunnableBindingBase):
+        return _is_branching_runnable(runnable.bound)
+
+    return False
+
+
+def _is_each_runnable(runnable) -> bool:
+    """Check if a runnable is a RunnableEach.
+
+    Args:
+        runnable: Any LangChain Runnable
+
+    Returns:
+        True if the runnable is a RunnableEachBase, False otherwise
+    """
+    if isinstance(runnable, RunnableEachBase):
+        return True
+
+    if isinstance(runnable, RunnableBindingBase):
+        return _is_each_runnable(runnable.bound)
+
+    return False
