@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.retrievers import BaseRetriever
-from langchain_core.runnables import Runnable, RunnableSequence, RunnablePassthrough
+from langchain_core.runnables import Runnable, RunnableSequence, RunnablePassthrough, RunnableParallel
 from langchain_core.runnables.base import RunnableBindingBase, RunnableEachBase
 from langchain_core.runnables.branch import RunnableBranch
 
@@ -37,7 +37,8 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
         ChainParts with the three components
 
     Raises:
-        UnsupportedChainError: If chain has multiple models, retrievers, RunnableBranch, or RunnableEach
+        UnsupportedChainError: If chain has multiple models, hidden models in containers,
+            retrievers, RunnableBranch, or RunnableEach
     """
     # Get steps from a RunnableSequence, or treat single runnable as one step
     if isinstance(chain, RunnableSequence):
@@ -63,11 +64,23 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
                 "RunnableEach may wrap models that cannot be analyzed."
             )
 
-    # Find all model indices
+    # Find top-level model indices (for splitting)
     model_indices: List[int] = []
     for i, step in enumerate(steps):
         if _unwrap_to_model(step) is not None:
             model_indices.append(i)
+
+    # Deep scan for hidden models inside containers (like RunnableParallel)
+    for i, step in enumerate(steps):
+        if i in model_indices:
+            continue  # Already counted as top-level
+        hidden = _find_hidden_models(step)
+        if hidden:
+            raise UnsupportedChainError(
+                f"Found {len(hidden)} model(s) hidden inside a container. "
+                "Models must be at the top level of the chain, not nested inside "
+                "RunnableParallel or similar containers."
+            )
 
     # Validate: at most one model
     if len(model_indices) > 1:
@@ -194,3 +207,47 @@ def _is_each_runnable(runnable) -> bool:
         return _is_each_runnable(runnable.bound)
 
     return False
+
+
+def _find_hidden_models(runnable) -> List[BaseLanguageModel]:
+    """Recursively find models hidden inside container runnables.
+
+    Inspects inside RunnableParallel and similar containers to find
+    models that would be missed by top-level scanning.
+
+    Args:
+        runnable: Any LangChain Runnable
+
+    Returns:
+        List of models found inside the runnable (empty if none)
+    """
+    models: List[BaseLanguageModel] = []
+
+    # Unwrap bindings first
+    if isinstance(runnable, RunnableBindingBase):
+        return _find_hidden_models(runnable.bound)
+
+    # Check inside RunnableParallel branches
+    if isinstance(runnable, RunnableParallel):
+        # RunnableParallel.steps__ is a dict of key -> Runnable
+        for branch in runnable.steps__.values():
+            # Check if branch itself is a model
+            model = _unwrap_to_model(branch)
+            if model:
+                models.append(model)
+            else:
+                # Recurse into the branch
+                models.extend(_find_hidden_models(branch))
+        return models
+
+    # Check inside nested RunnableSequence
+    if isinstance(runnable, RunnableSequence):
+        for step in runnable.steps:
+            model = _unwrap_to_model(step)
+            if model:
+                models.append(model)
+            else:
+                models.extend(_find_hidden_models(step))
+        return models
+
+    return models

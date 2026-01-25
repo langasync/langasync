@@ -995,3 +995,96 @@ class TestRejectedRunnables:
             get_parts_from_chain(bound)
 
         assert "each" in str(exc_info.value).lower()
+
+
+class TestHiddenModels:
+    """Tests for models hidden inside container runnables."""
+
+    def test_model_hidden_in_parallel_raises_error(
+        self, chat_model: MockChatModel, another_model: AnotherMockChatModel
+    ):
+        """Model inside RunnableParallel raises UnsupportedChainError."""
+        parallel = RunnableParallel(
+            branch_a=chat_model,
+            branch_b=RunnableLambda(lambda x: x),
+        )
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(parallel)
+
+        assert "hidden" in str(exc_info.value).lower()
+
+    def test_model_hidden_in_parallel_with_top_level_model(
+        self, chat_model: MockChatModel, another_model: AnotherMockChatModel
+    ):
+        """Model in RunnableParallel plus top-level model raises error."""
+        parallel = RunnableParallel(
+            branch_a=another_model,
+            branch_b=RunnableLambda(lambda x: x),
+        )
+        chain = parallel | chat_model
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(chain)
+
+        assert "hidden" in str(exc_info.value).lower()
+
+    def test_multiple_models_hidden_in_parallel(
+        self, chat_model: MockChatModel, another_model: AnotherMockChatModel
+    ):
+        """Multiple models inside RunnableParallel raises error."""
+        parallel = RunnableParallel(
+            branch_a=chat_model,
+            branch_b=another_model,
+        )
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(parallel)
+
+        assert "hidden" in str(exc_info.value).lower()
+        assert "2" in str(exc_info.value)
+
+    def test_bound_model_hidden_in_parallel(self, chat_model: MockChatModel):
+        """Bound model inside RunnableParallel is still detected."""
+        bound_model = chat_model.bind(temperature=0.5)
+        parallel = RunnableParallel(
+            branch_a=bound_model,
+            branch_b=RunnableLambda(lambda x: x),
+        )
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(parallel)
+
+        assert "hidden" in str(exc_info.value).lower()
+
+    def test_model_in_nested_parallel(
+        self, chat_model: MockChatModel, chat_prompt: ChatPromptTemplate
+    ):
+        """Model in nested RunnableParallel raises error."""
+        inner_parallel = RunnableParallel(
+            inner_a=chat_model,
+            inner_b=RunnableLambda(lambda x: x),
+        )
+        outer_parallel = RunnableParallel(
+            outer_a=inner_parallel,
+            outer_b=RunnableLambda(lambda x: x),
+        )
+        chain = chat_prompt | outer_parallel
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(chain)
+
+        assert "hidden" in str(exc_info.value).lower()
+
+    def test_parallel_without_models_still_works(self, chat_model: MockChatModel):
+        """RunnableParallel without hidden models works fine."""
+        parallel = RunnableParallel(
+            a=RunnableLambda(lambda x: x["input"]),
+            b=RunnableLambda(lambda x: x["context"]),
+        )
+        chain = parallel | chat_model
+        parts = get_parts_from_chain(chain)
+
+        assert parts.model is chat_model
+        assert parts.preprocessing is parallel
+        assert isinstance(parts.postprocessing, RunnablePassthrough)
