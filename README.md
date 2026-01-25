@@ -24,8 +24,7 @@ pip install -e ".[dev]"
 ```
 langasync/
 ├── langasync/
-│   ├── core/              # Core abstractions and base classes
-│   │   ├── base.py        # BaseProvider class
+│   ├── core/              # Core abstractions
 │   │   ├── exceptions.py  # Custom exceptions
 │   │   └── types.py       # Shared type definitions
 │   └── providers/         # Provider implementations

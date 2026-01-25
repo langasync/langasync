@@ -8,7 +8,14 @@ version = "0.1.0"
 description = "Async API integration library for multiple providers"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = []
+dependencies = [
+    "pydantic>=2.0",
+    "langchain-core>=0.1.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["langasync*"]
+exclude = ["plans*"]
 
 [project.optional-dependencies]
 dev = [
