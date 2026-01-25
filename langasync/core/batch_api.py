@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from pydantic import BaseModel, Field
@@ -16,7 +16,7 @@ class NullLanguageModel(BaseModel):
     pass
 
 
-LanguageModelType = Union[BaseLanguageModel, NullLanguageModel]
+LanguageModelType = BaseLanguageModel | NullLanguageModel
 
 
 class BatchStatus(str, Enum):
@@ -45,10 +45,10 @@ class BatchResponse(BaseModel):
 
     custom_id: str
     success: bool
-    content: Optional[str] = None
-    error: Optional[Dict[str, Any]] = None
-    usage: Optional[Dict[str, int]] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    content: str | None = None
+    error: dict[str, Any] | None = None
+    usage: dict[str, int] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class BatchStatusInfo(BaseModel):
@@ -61,13 +61,13 @@ class BatchStatusInfo(BaseModel):
 
 
 @dataclass
-class BatchJob:
+class BatchApiJob:
     """Simple data container for batch job information."""
 
     id: str
     provider: str
     created_at: datetime
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class BatchApiAdapterInterface(ABC):
@@ -76,9 +76,9 @@ class BatchApiAdapterInterface(ABC):
     @abstractmethod
     async def create_batch(
         self,
-        inputs: List[LanguageModelInput],
+        inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
-    ) -> BatchJob:
+    ) -> BatchApiJob:
         """Create a new batch job.
 
         Args:
@@ -92,11 +92,11 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_status(self, batch_job: BatchJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
         """Get the current status of a batch job.
 
         Args:
-            batch_job: The batch job to check
+            batch_api_job: The batch job to check
 
         Returns:
             Status info including request counts
@@ -104,7 +104,7 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def list_batches(self, limit: int = 20) -> List[BatchJob]:
+    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
         """List recent batch jobs.
 
         Args:
@@ -116,11 +116,11 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_results(self, batch_job: BatchJob) -> List[BatchResponse]:
+    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
         """Get results from a completed batch job.
 
         Args:
-            batch_job: The batch job to get results from
+            batch_api_job: The batch job to get results from
 
         Returns:
             List of responses, including both successes and failures
@@ -128,11 +128,11 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def cancel(self, batch_job: BatchJob) -> bool:
+    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
         """Cancel a batch job.
 
         Args:
-            batch_job: The batch job to cancel
+            batch_api_job: The batch job to cancel
 
         Returns:
             True if cancellation was successful, False otherwise

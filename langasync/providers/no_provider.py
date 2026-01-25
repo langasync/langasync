@@ -2,13 +2,12 @@
 
 import uuid
 from datetime import datetime
-from typing import Dict, List
 
 from langchain_core.language_models import LanguageModelInput
 
 from langasync.core.batch_api import (
     BatchApiAdapterInterface,
-    BatchJob,
+    BatchApiJob,
     BatchResponse,
     BatchStatus,
     BatchStatusInfo,
@@ -20,26 +19,26 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
     """Pass-through adapter for chains without a model. Results are immediate."""
 
     def __init__(self):
-        self._batches: Dict[str, BatchJob] = {}
-        self._inputs: Dict[str, List[LanguageModelInput]] = {}
+        self._batches: dict[str, BatchApiJob] = {}
+        self._inputs: dict[str, list[LanguageModelInput]] = {}
 
     async def create_batch(
         self,
-        inputs: List[LanguageModelInput],
+        inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
-    ) -> BatchJob:
+    ) -> BatchApiJob:
         batch_id = f"no-model-{uuid.uuid4()}"
-        batch_job = BatchJob(
+        batch_api_job = BatchApiJob(
             id=batch_id,
             provider="none",
             created_at=datetime.now(),
         )
-        self._batches[batch_id] = batch_job
+        self._batches[batch_id] = batch_api_job
         self._inputs[batch_id] = inputs
-        return batch_job
+        return batch_api_job
 
-    async def get_status(self, batch_job: BatchJob) -> BatchStatusInfo:
-        inputs = self._inputs.get(batch_job.id, [])
+    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+        inputs = self._inputs.get(batch_api_job.id, [])
         return BatchStatusInfo(
             status=BatchStatus.COMPLETED,
             total=len(inputs),
@@ -47,11 +46,11 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
             failed=0,
         )
 
-    async def list_batches(self, limit: int = 20) -> List[BatchJob]:
+    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
         return list(self._batches.values())[:limit]
 
-    async def get_results(self, batch_job: BatchJob) -> List[BatchResponse]:
-        inputs = self._inputs.get(batch_job.id, [])
+    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+        inputs = self._inputs.get(batch_api_job.id, [])
         return [
             BatchResponse(
                 custom_id=str(i),
@@ -61,5 +60,5 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
             for i, inp in enumerate(inputs)
         ]
 
-    async def cancel(self, batch_job: BatchJob) -> bool:
+    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
         return False  # Already completed, can't cancel

@@ -1,13 +1,18 @@
 """Extract model and pre/post processing parts from LangChain chains."""
 
 from dataclasses import dataclass
-from typing import List, Optional
 
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.retrievers import BaseRetriever
-from langchain_core.runnables import Runnable, RunnableSequence, RunnablePassthrough, RunnableParallel
+from langchain_core.runnables import (
+    Runnable,
+    RunnableSequence,
+    RunnablePassthrough,
+    RunnableParallel,
+)
 from langchain_core.runnables.base import RunnableBindingBase, RunnableEachBase
 from langchain_core.runnables.branch import RunnableBranch
+from langchain_core.runnables.passthrough import RunnableAssign
 
 from langasync.core.exceptions import UnsupportedChainError
 
@@ -17,7 +22,7 @@ class ChainParts:
     """The decomposed parts of a chain."""
 
     preprocessing: Runnable
-    model: Optional[BaseLanguageModel]
+    model: BaseLanguageModel | None
     postprocessing: Runnable
 
 
@@ -64,57 +69,49 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
                 "RunnableEach may wrap models that cannot be analyzed."
             )
 
-    # Find top-level model indices (for splitting)
-    model_indices: List[int] = []
+    # Find model and scan for hidden models in a single pass
+    single_model_index: int | None = None
     for i, step in enumerate(steps):
-        if _unwrap_to_model(step) is not None:
-            model_indices.append(i)
+        _model = _unwrap_to_model(step)
 
-    # Deep scan for hidden models inside containers (like RunnableParallel)
-    for i, step in enumerate(steps):
-        if i in model_indices:
-            continue  # Already counted as top-level
-        hidden = _find_hidden_models(step)
-        if hidden:
-            raise UnsupportedChainError(
-                f"Found {len(hidden)} model(s) hidden inside a container. "
-                "Models must be at the top level of the chain, not nested inside "
-                "RunnableParallel or similar containers."
-            )
-
-    # Validate: at most one model
-    if len(model_indices) > 1:
-        raise UnsupportedChainError(
-            f"Chains with multiple models are not supported. Found {len(model_indices)} models."
-        )
+        model_set_in_previous_step = single_model_index is not None
+        if _model is not None and model_set_in_previous_step:
+            raise UnsupportedChainError("Chains with multiple models are not supported.")
+        elif _model is not None:
+            single_model_index = i
+        else:
+            # Not a top-level model, check for hidden models inside containers
+            hidden = _find_hidden_models(step)
+            if hidden:
+                raise UnsupportedChainError(
+                    f"Found {len(hidden)} model(s) hidden inside a container. "
+                    "Models must be at the top level of the chain, not nested inside "
+                    "RunnableParallel or similar containers."
+                )
 
     # No model case
-    if len(model_indices) == 0:
+    if single_model_index is None:
         return ChainParts(
             preprocessing=chain,
             model=None,
             postprocessing=RunnablePassthrough(),
         )
 
-    # Single model case
-    model_idx = model_indices[0]
-    model = _unwrap_to_model(steps[model_idx])
-
     # Split into pre and post
-    pre_steps = steps[:model_idx]
-    post_steps = steps[model_idx + 1 :]
+    pre_steps = steps[:single_model_index]
+    post_steps = steps[single_model_index + 1 :]
 
     preprocessing = _steps_to_runnable(pre_steps)
     postprocessing = _steps_to_runnable(post_steps)
 
     return ChainParts(
         preprocessing=preprocessing,
-        model=model,
+        model=_unwrap_to_model(steps[single_model_index]),
         postprocessing=postprocessing,
     )
 
 
-def _steps_to_runnable(steps: List[Runnable]) -> Runnable:
+def _steps_to_runnable(steps: list[Runnable]) -> Runnable:
     """Convert a list of steps back into a Runnable."""
     if len(steps) == 0:
         return RunnablePassthrough()
@@ -128,7 +125,7 @@ def _steps_to_runnable(steps: List[Runnable]) -> Runnable:
         return result
 
 
-def _unwrap_to_model(runnable) -> Optional[BaseLanguageModel]:
+def _unwrap_to_model(runnable) -> BaseLanguageModel | None:
     """Unwrap a runnable to get the underlying BaseLanguageModel, if any.
 
     Handles:
@@ -209,23 +206,51 @@ def _is_each_runnable(runnable) -> bool:
     return False
 
 
-def _find_hidden_models(runnable) -> List[BaseLanguageModel]:
+def _find_hidden_models(runnable) -> list[BaseLanguageModel]:
     """Recursively find models hidden inside container runnables.
 
-    Inspects inside RunnableParallel and similar containers to find
-    models that would be missed by top-level scanning.
+    Inspects inside RunnableParallel, RunnableAssign, and similar containers
+    to find models that would be missed by top-level scanning.
+
+    Also raises UnsupportedChainError if unsupported components (RunnableBranch,
+    RunnableEach, retrievers) are found nested inside containers.
 
     Args:
         runnable: Any LangChain Runnable
 
     Returns:
         List of models found inside the runnable (empty if none)
+
+    Raises:
+        UnsupportedChainError: If unsupported components are found nested
     """
-    models: List[BaseLanguageModel] = []
+    models: list[BaseLanguageModel] = []
 
     # Unwrap bindings first
     if isinstance(runnable, RunnableBindingBase):
         return _find_hidden_models(runnable.bound)
+
+    # Check for unsupported types nested inside containers
+    if isinstance(runnable, RunnableBranch):
+        raise UnsupportedChainError(
+            "Chains containing RunnableBranch are not supported. "
+            "Branching logic may contain hidden models that cannot be analyzed."
+        )
+    if isinstance(runnable, RunnableEachBase):
+        raise UnsupportedChainError(
+            "Chains containing RunnableEach are not supported. "
+            "RunnableEach may wrap models that cannot be analyzed."
+        )
+    if isinstance(runnable, BaseRetriever):
+        raise UnsupportedChainError(
+            "Chains containing retrievers are not supported. "
+            "Retrievers should be executed separately before batch submission."
+        )
+
+    # Check inside RunnableAssign (from .assign())
+    if isinstance(runnable, RunnableAssign):
+        # RunnableAssign.mapper is a RunnableParallel
+        return _find_hidden_models(runnable.mapper)
 
     # Check inside RunnableParallel branches
     if isinstance(runnable, RunnableParallel):

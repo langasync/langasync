@@ -1,7 +1,6 @@
 """Shared test fixtures for core module tests."""
 
 import pytest
-from typing import List, Optional
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
@@ -20,8 +19,8 @@ class MockChatModel(BaseChatModel):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
         **kwargs,
     ) -> ChatResult:
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="mock response"))])
@@ -38,8 +37,8 @@ class MockLLM(BaseLLM):
 
     def _generate(
         self,
-        prompts: List[str],
-        stop: Optional[List[str]] = None,
+        prompts: list[str],
+        stop: list[str] | None = None,
         **kwargs,
     ) -> LLMResult:
         return LLMResult(generations=[[Generation(text="mock response")]])
@@ -56,8 +55,8 @@ class AnotherMockChatModel(BaseChatModel):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
         **kwargs,
     ) -> ChatResult:
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content="another mock"))])
@@ -74,8 +73,8 @@ class MockRetriever(BaseRetriever):
         self,
         query: str,
         *,
-        run_manager: Optional[CallbackManagerForRetrieverRun] = None,
-    ) -> List[Document]:
+        run_manager: CallbackManagerForRetrieverRun | None = None,
+    ) -> list[Document]:
         return [Document(page_content=f"Mock document for: {query}")]
 
 

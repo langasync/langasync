@@ -1088,3 +1088,65 @@ class TestHiddenModels:
         assert parts.model is chat_model
         assert parts.preprocessing is parallel
         assert isinstance(parts.postprocessing, RunnablePassthrough)
+
+    def test_model_hidden_in_assign_raises_error(self, chat_model: MockChatModel):
+        """Model inside RunnablePassthrough.assign() raises UnsupportedChainError."""
+        chain = RunnablePassthrough.assign(result=chat_model)
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(chain)
+
+        assert "hidden" in str(exc_info.value).lower()
+
+    def test_assign_without_model_works(self, chat_model: MockChatModel):
+        """RunnablePassthrough.assign() without models works fine."""
+        chain = RunnablePassthrough.assign(foo=RunnableLambda(lambda x: x["input"])) | chat_model
+        parts = get_parts_from_chain(chain)
+
+        assert parts.model is chat_model
+        assert isinstance(parts.postprocessing, RunnablePassthrough)
+
+    def test_nested_branch_in_parallel_raises_error(self):
+        """RunnableBranch nested inside RunnableParallel raises error."""
+        from langchain_core.runnables.branch import RunnableBranch
+
+        branch = RunnableBranch(
+            (lambda x: x > 0, RunnableLambda(lambda x: "positive")),
+            RunnableLambda(lambda x: "negative"),
+        )
+        parallel = RunnableParallel(
+            a=RunnableLambda(lambda x: x),
+            b=branch,
+        )
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(parallel)
+
+        assert "branch" in str(exc_info.value).lower()
+
+    def test_nested_each_in_parallel_raises_error(self):
+        """RunnableEach nested inside RunnableParallel raises error."""
+        from langchain_core.runnables.base import RunnableEach
+
+        each = RunnableEach(bound=RunnableLambda(lambda x: x))
+        parallel = RunnableParallel(
+            a=RunnableLambda(lambda x: x),
+            b=each,
+        )
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(parallel)
+
+        assert "each" in str(exc_info.value).lower()
+
+    def test_nested_retriever_in_parallel_raises_error(self, mock_retriever: MockRetriever):
+        """Retriever nested inside RunnableParallel raises error."""
+        parallel = RunnableParallel(
+            a=RunnableLambda(lambda x: x),
+            b=mock_retriever,
+        )
+
+        with pytest.raises(UnsupportedChainError) as exc_info:
+            get_parts_from_chain(parallel)
+
+        assert "retriever" in str(exc_info.value).lower()

@@ -3,13 +3,14 @@
 from .exceptions import LangAsyncError, ProviderError, ConfigurationError, UnsupportedChainError
 from .batch_api import (
     BatchApiAdapterInterface,
-    BatchJob,
+    BatchApiJob,
     BatchResponse,
     BatchStatus,
     BatchStatusInfo,
     FINISHED_STATUSES,
 )
 from .batch_chain import BatchChainWrapper, BatchJobService
+from .batch_job_repository import BatchJob, BatchJobRepository, FileSystemBatchJobRepository
 from .get_parts_from_chain import get_parts_from_chain, ChainParts
 
 __all__ = [
@@ -18,7 +19,10 @@ __all__ = [
     "ConfigurationError",
     "UnsupportedChainError",
     "BatchApiAdapterInterface",
+    "BatchApiJob",
     "BatchJob",
+    "BatchJobRepository",
+    "FileSystemBatchJobRepository",
     "BatchResponse",
     "BatchStatus",
     "BatchStatusInfo",
