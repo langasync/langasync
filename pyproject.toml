@@ -36,7 +36,9 @@ env_files = [".env.test"]
 [tool.black]
 line-length = 100
 target-version = ["py38"]
+exclude = ".venv"
 
 [tool.ruff]
 line-length = 100
 target-version = "py38"
+exclude = [".venv"]
