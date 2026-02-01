@@ -228,9 +228,7 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
     async def cancel(self, batch_api_job: BatchApiJob) -> bool:
         """Cancel a batch job."""
         try:
-            response = await self._client.post(
-                f"{self.base_url}/batches/{batch_api_job.id}/cancel"
-            )
+            response = await self._client.post(f"{self.base_url}/batches/{batch_api_job.id}/cancel")
             response.raise_for_status()
             return True
         except httpx.HTTPStatusError:

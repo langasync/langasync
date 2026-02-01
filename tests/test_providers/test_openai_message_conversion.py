@@ -24,11 +24,13 @@ class TestConvertToOpenAIMessages:
         assert result == {"role": "assistant", "content": "Hi there"}
 
     def test_list_of_messages_returns_list(self):
-        result = convert_to_openai_messages([
-            SystemMessage("You are helpful"),
-            HumanMessage("Hello"),
-            AIMessage("Hi!"),
-        ])
+        result = convert_to_openai_messages(
+            [
+                SystemMessage("You are helpful"),
+                HumanMessage("Hello"),
+                AIMessage("Hi!"),
+            ]
+        )
         assert result == [
             {"role": "system", "content": "You are helpful"},
             {"role": "user", "content": "Hello"},
@@ -40,10 +42,12 @@ class TestConvertToOpenAIMessages:
         assert result == {"role": "user", "content": "Hello"}
 
     def test_list_of_dicts_passes_through(self):
-        result = convert_to_openai_messages([
-            {"role": "system", "content": "Be helpful"},
-            {"role": "user", "content": "Hello"},
-        ])
+        result = convert_to_openai_messages(
+            [
+                {"role": "system", "content": "Be helpful"},
+                {"role": "user", "content": "Hello"},
+            ]
+        )
         assert result == [
             {"role": "system", "content": "Be helpful"},
             {"role": "user", "content": "Hello"},
