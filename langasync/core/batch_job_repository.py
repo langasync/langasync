@@ -9,13 +9,15 @@ from typing import Any
 import cloudpickle
 from langchain_core.runnables import Runnable
 
+from langasync.core.batch_api import Provider
+
 
 @dataclass
 class BatchJob:
     """Persistable batch job with postprocessing chain."""
 
     id: str
-    provider: str
+    provider: Provider
     created_at: datetime
     postprocessing_chain: Runnable
     finished: bool = False
@@ -106,7 +108,7 @@ class FileSystemBatchJobRepository(BatchJobRepository):
 
         return BatchJob(
             id=job_data["id"],
-            provider=job_data["provider"],
+            provider=Provider(job_data["provider"]),
             created_at=datetime.fromisoformat(job_data["created_at"]),
             metadata=job_data.get("metadata", {}),
             finished=job_data.get("finished", False),

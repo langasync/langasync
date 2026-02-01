@@ -67,3 +67,9 @@ Thumbs.db
 
 # Plans
 plans/
+
+# Example batch job storage
+.batch_jobs/
+
+# Environment files
+.env

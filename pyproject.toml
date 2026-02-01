@@ -26,6 +26,7 @@ dev = [
     "pytest-dotenv>=0.5",
     "black>=23.0",
     "ruff>=0.1",
+    "langchain-openai>=0.1.0"
 ]
 
 [tool.pytest.ini_options]

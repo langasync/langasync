@@ -17,6 +17,7 @@ from langasync.core.batch_api import (
     BatchStatus,
     BatchStatusInfo,
     LanguageModelType,
+    Provider,
 )
 
 
@@ -157,7 +158,7 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
 
         return BatchApiJob(
             id=batch_data["id"],
-            provider="openai",
+            provider=Provider.OPENAI,
             created_at=datetime.fromtimestamp(batch_data["created_at"]),
             metadata={"input_file_id": file_id},
         )
@@ -189,7 +190,7 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
         return [
             BatchApiJob(
                 id=batch["id"],
-                provider="openai",
+                provider=Provider.OPENAI,
                 created_at=datetime.fromtimestamp(batch["created_at"]),
                 metadata={"input_file_id": batch.get("input_file_id")},
             )

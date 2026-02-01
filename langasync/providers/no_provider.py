@@ -16,6 +16,7 @@ from langasync.core.batch_api import (
     BatchStatus,
     BatchStatusInfo,
     LanguageModelType,
+    Provider,
 )
 
 
@@ -73,7 +74,7 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
         batch_id = f"no-model-{uuid.uuid4()}"
         batch_api_job = BatchApiJob(
             id=batch_id,
-            provider="none",
+            provider=Provider.NONE,
             created_at=datetime.now(),
         )
         await self._persistence.save(batch_id, inputs)

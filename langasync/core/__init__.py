@@ -14,8 +14,9 @@ from .batch_api import (
     BatchStatus,
     BatchStatusInfo,
     FINISHED_STATUSES,
+    Provider,
 )
-from .batch_chain import BatchChainWrapper
+from .batch_chain import BatchChainWrapper, batch_chain
 from .batch_service import BatchJobService, ProcessedResults
 from .batch_job_repository import BatchJob, BatchJobRepository, FileSystemBatchJobRepository
 from .batch_poller import BatchPoller
@@ -36,7 +37,9 @@ __all__ = [
     "BatchStatus",
     "BatchStatusInfo",
     "FINISHED_STATUSES",
+    "Provider",
     "BatchChainWrapper",
+    "batch_chain",
     "BatchJobService",
     "BatchPoller",
     "ProcessedResults",

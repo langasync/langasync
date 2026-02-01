@@ -1,11 +1,16 @@
 """BatchPoller for polling pending batch jobs and yielding results."""
 
 import asyncio
+import logging
 from typing import AsyncIterator
 
 from langasync.core.batch_api import FINISHED_STATUSES
+
+
 from langasync.core.batch_service import BatchJobService, ProcessedResults
 from langasync.core.batch_job_repository import BatchJobRepository
+
+logger = logging.getLogger(__name__)
 
 
 class BatchPoller:
@@ -51,6 +56,10 @@ class BatchPoller:
             ProcessedResults for each completed job
         """
         services_to_watch = await self._get_new_pending_services_to_watch_dict()
+        if len(services_to_watch) == 0:
+            logger.info("No pending jobs found.")
+        else:
+            logger.info(f"Found {len(services_to_watch)} pending job(s). Polling for results...")
 
         if watch_for_new:
             is_continue_fn = lambda _: True

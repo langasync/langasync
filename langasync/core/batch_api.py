@@ -19,6 +19,14 @@ class NullLanguageModel(BaseModel):
 LanguageModelType = BaseLanguageModel | NullLanguageModel
 
 
+class Provider(str, Enum):
+    """Supported batch API providers."""
+
+    NONE = "none"
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+
+
 class BatchStatus(str, Enum):
     """Status of a batch job across providers."""
 
@@ -47,7 +55,7 @@ class BatchResponse(BaseModel):
     success: bool
     content: Any = None
     error: dict[str, Any] | None = None
-    usage: dict[str, int] | None = None
+    usage: dict[str, Any] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -65,7 +73,7 @@ class BatchApiJob:
     """Simple data container for batch job information."""
 
     id: str
-    provider: str
+    provider: Provider
     created_at: datetime
     metadata: dict[str, Any] = field(default_factory=dict)
 
