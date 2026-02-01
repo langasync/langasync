@@ -16,7 +16,7 @@ from langasync.core.batch_api import (
     BatchStatusInfo,
     BatchResponse,
 )
-from langasync.providers.no_provider import NoModelBatchApiAdapter
+from langasync.providers.none import NoModelBatchApiAdapter
 
 
 class MockInProgressApiAdapter(BatchApiAdapterInterface):

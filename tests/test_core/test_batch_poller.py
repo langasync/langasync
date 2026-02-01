@@ -18,7 +18,7 @@ from langasync.core.batch_api import (
     BatchResponse,
 )
 from langasync.providers import Provider
-from langasync.providers.no_provider import NoModelBatchApiAdapter
+from langasync.providers.none import NoModelBatchApiAdapter
 
 
 class FailingBatchApiAdapter(NoModelBatchApiAdapter):
