@@ -3,6 +3,7 @@
 from enum import Enum
 
 from langasync.providers.no_provider import NoModelBatchApiAdapter
+from langasync.providers.openai_provider import OpenAIBatchApiAdapter
 
 
 class Provider(str, Enum):
@@ -15,6 +16,6 @@ class Provider(str, Enum):
 
 ADAPTER_REGISTRY: dict[Provider, type] = {
     Provider.NONE: NoModelBatchApiAdapter,
-    # Provider.OPENAI: OpenAIBatchApiAdapter,
+    Provider.OPENAI: OpenAIBatchApiAdapter,
     # Provider.ANTHROPIC: AnthropicBatchApiAdapter,
 }
