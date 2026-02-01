@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
+from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.messages.utils import convert_to_openai_messages
 
 from langasync.core.batch_api import (
@@ -212,18 +213,21 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
                 error=error_data or {"message": f"Request failed with status {status_code}"},
             )
 
-        # Parse successful response
+        # Parse successful response using LangChain's convert_to_messages
+        # This handles tool_calls extraction automatically
         body = response_data.get("body", {})
         choices = body.get("choices", [])
-        content = None
-        if choices and isinstance(choices[0], dict):
-            message = choices[0].get("message", {})
-            content = message.get("content")
+        if choices:
+            message_dict = choices[0].get("message", {})
+            # convert_to_messages expects role/content format (OpenAI format)
+            ai_message = convert_to_messages([message_dict])[0]
+        else:
+            ai_message = AIMessage(content="")
 
         return BatchResponse(
             custom_id=custom_id,
             success=True,
-            content=content,
+            content=ai_message,
             usage=body.get("usage"),
         )
 
