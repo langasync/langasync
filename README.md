@@ -76,7 +76,7 @@ async for result in poller.wait_all():
 ## Supported Providers
 
 - OpenAI Batch API
-- Anthropic Message Batches (coming soon)
+- Anthropic Message Batches
 
 ## Running Tests
 
