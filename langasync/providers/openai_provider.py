@@ -65,14 +65,33 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
             timeout=60.0,
         )
 
-    def _get_model_name(self, language_model: LanguageModelType) -> str:
-        """Extract model name from LangChain model."""
-        if hasattr(language_model, "model_name"):
-            return language_model.model_name
-        elif hasattr(language_model, "model"):
-            return language_model.model
-        else:
-            return "gpt-4o-mini"
+    def _get_model_config(self, language_model: LanguageModelType) -> dict[str, Any]:
+        """Extract model config from LangChain model for batch request body."""
+        # Get model name
+        model = getattr(language_model, "model_name", None) or getattr(
+            language_model, "model", "gpt-4o-mini"
+        )
+
+        config: dict[str, Any] = {"model": model}
+
+        # Extract OpenAI params if present
+        for param in (
+            "temperature",
+            "max_tokens",
+            "top_p",
+            "frequency_penalty",
+            "presence_penalty",
+            "stop",
+            "seed",
+        ):
+            value = getattr(language_model, param, None)
+            if value is not None:
+                config[param] = value
+
+        # Merge any extra model_kwargs
+        config.update(getattr(language_model, "model_kwargs", {}))
+
+        return config
 
     async def _upload_batch_file(self, jsonl_content: str) -> str:
         """Upload JSONL file to OpenAI and return file ID."""
@@ -104,20 +123,18 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
         language_model: LanguageModelType,
     ) -> BatchApiJob:
         """Create a new batch job with OpenAI."""
-        model_name = self._get_model_name(language_model)
+        model_config = self._get_model_config(language_model)
 
         # Build JSONL content
         lines = []
         for i, inp in enumerate(inputs):
             messages = _to_openai_messages(inp)
+            body = {**model_config, "messages": messages}
             request = {
                 "custom_id": str(i),
                 "method": "POST",
                 "url": "/v1/chat/completions",
-                "body": {
-                    "model": model_name,
-                    "messages": messages,
-                },
+                "body": body,
             }
             lines.append(json.dumps(request))
 
@@ -179,49 +196,64 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
             for batch in data.get("data", [])
         ]
 
+    def _parse_output_line(self, data: dict) -> BatchResponse:
+        """Parse a single line from output/error file."""
+        custom_id = data.get("custom_id", "")
+        response_data = data.get("response", {})
+        error_data = data.get("error")
+        status_code = response_data.get("status_code", 0)
+
+        # Check for errors (explicit error field or non-200 status)
+        if error_data or status_code != 200:
+            return BatchResponse(
+                custom_id=custom_id,
+                success=False,
+                error=error_data or {"message": f"Request failed with status {status_code}"},
+            )
+
+        # Parse successful response
+        body = response_data.get("body", {})
+        choices = body.get("choices", [])
+        content = None
+        if choices and isinstance(choices[0], dict):
+            message = choices[0].get("message", {})
+            content = message.get("content")
+
+        return BatchResponse(
+            custom_id=custom_id,
+            success=True,
+            content=content,
+            usage=body.get("usage"),
+        )
+
     async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
         """Get results from a completed batch job."""
         response = await self._client.get(f"{self.base_url}/batches/{batch_api_job.id}")
         response.raise_for_status()
         batch_data = response.json()
 
-        results = []
+        # Use dict to deduplicate by custom_id (error file takes precedence)
+        results_by_id: dict[str, BatchResponse] = {}
 
-        # Parse successful results from output file
+        # Parse results from output file first
         output_file_id = batch_data.get("output_file_id")
         if output_file_id:
             content = await self._download_file(output_file_id)
             for line in content.strip().split("\n"):
-                if not line:
-                    continue
-                data = json.loads(line)
-                body = data.get("response", {}).get("body", {})
-                choices = body.get("choices", [])
-                results.append(
-                    BatchResponse(
-                        custom_id=data.get("custom_id", ""),
-                        success=True,
-                        content=choices[0]["message"]["content"] if choices else None,
-                        usage=body.get("usage"),
-                    )
-                )
+                if line:
+                    result = self._parse_output_line(json.loads(line))
+                    results_by_id[result.custom_id] = result
 
-        # Parse failed results from error file
+        # Parse results from error file (overwrites if duplicate)
         error_file_id = batch_data.get("error_file_id")
         if error_file_id:
             content = await self._download_file(error_file_id)
             for line in content.strip().split("\n"):
-                if not line:
-                    continue
-                data = json.loads(line)
-                results.append(
-                    BatchResponse(
-                        custom_id=data.get("custom_id", ""),
-                        success=False,
-                        error=data.get("error"),
-                    )
-                )
+                if line:
+                    result = self._parse_output_line(json.loads(line))
+                    results_by_id[result.custom_id] = result
 
+        results = list(results_by_id.values())
         results.sort(key=lambda r: int(r.custom_id) if r.custom_id.isdigit() else 0)
         return results
 
