@@ -25,13 +25,28 @@ class FailingBatchApiAdapter(NoModelBatchApiAdapter):
     """Adapter that returns FAILED status for testing."""
 
     async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
-        return BatchStatusInfo(
-            status=BatchStatus.FAILED, total=1, completed=0, failed=1
-        )
+        return BatchStatusInfo(status=BatchStatus.FAILED, total=1, completed=0, failed=1)
 
     async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
         # Return empty results for failed job
         return []
+
+
+class DelayedCompletionAdapter(NoModelBatchApiAdapter):
+    """Adapter that returns IN_PROGRESS for N calls, then COMPLETED."""
+
+    def __init__(self, calls_until_complete: int = 2):
+        super().__init__()
+        self.call_counts: dict[str, int] = {}
+        self.calls_until_complete = calls_until_complete
+
+    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+        job_id = batch_api_job.id
+        self.call_counts[job_id] = self.call_counts.get(job_id, 0) + 1
+
+        if self.call_counts[job_id] >= self.calls_until_complete:
+            return BatchStatusInfo(status=BatchStatus.COMPLETED, total=1, completed=1, failed=0)
+        return BatchStatusInfo(status=BatchStatus.IN_PROGRESS, total=1, completed=0, failed=0)
 
 
 @pytest.fixture
@@ -280,9 +295,7 @@ class TestBatchPollerFailedJobs:
     """Tests for BatchPoller handling of failed jobs."""
 
     @pytest.mark.asyncio
-    async def test_poller_yields_failed_jobs(
-        self, repository: FileSystemBatchJobRepository
-    ):
+    async def test_poller_yields_failed_jobs(self, repository: FileSystemBatchJobRepository):
         """Poller yields jobs with FAILED status instead of polling forever."""
         chain = RunnablePassthrough()
         await BatchJobService.create(
@@ -305,9 +318,7 @@ class TestBatchPollerFailedJobs:
         assert results[0].status_info.status == BatchStatus.FAILED
 
     @pytest.mark.asyncio
-    async def test_failed_job_marked_as_finished(
-        self, repository: FileSystemBatchJobRepository
-    ):
+    async def test_failed_job_marked_as_finished(self, repository: FileSystemBatchJobRepository):
         """Failed jobs are marked as finished in the repository."""
         chain = RunnablePassthrough()
         service = await BatchJobService.create(
@@ -329,3 +340,38 @@ class TestBatchPollerFailedJobs:
         job = await repository.get(service.job_id)
         assert job is not None
         assert job.finished is True
+
+
+class TestBatchPollerDelayedCompletion:
+    """Tests for BatchPoller handling jobs that take multiple polls to complete."""
+
+    @pytest.mark.asyncio
+    async def test_poller_waits_for_in_progress_jobs(
+        self, repository: FileSystemBatchJobRepository
+    ):
+        """Poller keeps polling IN_PROGRESS jobs until they complete."""
+        chain = RunnablePassthrough()
+        await BatchJobService.create(
+            inputs=["test"],
+            model=None,
+            preprocessing_chain=chain,
+            postprocessing_chain=chain,
+            repository=repository,
+        )
+
+        # Create adapter instance with shared state we can inspect
+        adapter = DelayedCompletionAdapter(calls_until_complete=3)
+
+        with patch(
+            "langasync.core.batch_service._get_adapter_from_provider",
+            return_value=adapter,
+        ):
+            poller = BatchPoller(repository, poll_interval=0.01)
+            results = [r async for r in poller.wait_all()]
+
+        assert len(results) == 1
+        assert results[0].status_info.status == BatchStatus.COMPLETED
+        # Verify it was polled multiple times before completing
+        assert len(adapter.call_counts) == 1
+        job_id = list(adapter.call_counts.keys())[0]
+        assert adapter.call_counts[job_id] >= 3
