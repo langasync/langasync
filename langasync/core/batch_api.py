@@ -45,7 +45,7 @@ class BatchResponse(BaseModel):
 
     custom_id: str
     success: bool
-    content: str | None = None
+    content: Any = None
     error: dict[str, Any] | None = None
     usage: dict[str, int] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

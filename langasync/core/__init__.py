@@ -15,8 +15,10 @@ from .batch_api import (
     BatchStatusInfo,
     FINISHED_STATUSES,
 )
-from .batch_chain import BatchChainWrapper, BatchJobService
+from .batch_chain import BatchChainWrapper
+from .batch_service import BatchJobService, ProcessedResults
 from .batch_job_repository import BatchJob, BatchJobRepository, FileSystemBatchJobRepository
+from .batch_poller import BatchPoller
 from .get_parts_from_chain import get_parts_from_chain, ChainParts
 
 __all__ = [
@@ -36,6 +38,8 @@ __all__ = [
     "FINISHED_STATUSES",
     "BatchChainWrapper",
     "BatchJobService",
+    "BatchPoller",
+    "ProcessedResults",
     "get_parts_from_chain",
     "ChainParts",
 ]

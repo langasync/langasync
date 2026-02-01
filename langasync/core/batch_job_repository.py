@@ -1,3 +1,4 @@
+import base64
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -5,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from langchain_core.load import dumpd, load
+import cloudpickle
 from langchain_core.runnables import Runnable
 
 
@@ -17,6 +18,7 @@ class BatchJob:
     provider: str
     created_at: datetime
     postprocessing_chain: Runnable
+    finished: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -40,8 +42,11 @@ class BatchJobRepository(ABC):
         pass
 
     @abstractmethod
-    async def list_pending(self) -> list[BatchJob]:
-        """List all pending (unfinished) batch jobs.
+    async def list(self, pending: bool = True) -> list[BatchJob]:
+        """List batch jobs.
+
+        Args:
+            pending: If True, only return unfinished jobs. If False, return all jobs.
 
         Returns:
             List of BatchJob instances
@@ -72,16 +77,19 @@ class FileSystemBatchJobRepository(BatchJobRepository):
         return self.storage_dir / f"{job_id}.json"
 
     async def save(self, batch_job: BatchJob) -> None:
+        # Use cloudpickle to serialize the chain (supports RunnableLambda with lambdas)
+        chain_bytes = cloudpickle.dumps(batch_job.postprocessing_chain)
+        chain_b64 = base64.b64encode(chain_bytes).decode("utf-8")
+
         data = {
             "id": batch_job.id,
             "provider": batch_job.provider,
             "created_at": batch_job.created_at.isoformat(),
             "metadata": batch_job.metadata,
-            "postprocessing_chain": dumpd(batch_job.postprocessing_chain),
+            "finished": batch_job.finished,
+            "postprocessing_chain": chain_b64,
         }
-        path = self._job_path(
-            batch_job.id,
-        )
+        path = self._job_path(batch_job.id)
         path.write_text(json.dumps(data, indent=2))
 
     async def get(self, job_id: str) -> BatchJob | None:
@@ -90,21 +98,30 @@ class FileSystemBatchJobRepository(BatchJobRepository):
             return None
 
         job_data = json.loads(path.read_text())
+
+        # Deserialize the chain using cloudpickle
+        chain_b64 = job_data["postprocessing_chain"]
+        chain_bytes = base64.b64decode(chain_b64)
+        postprocessing_chain = cloudpickle.loads(chain_bytes)
+
         return BatchJob(
             id=job_data["id"],
             provider=job_data["provider"],
             created_at=datetime.fromisoformat(job_data["created_at"]),
             metadata=job_data.get("metadata", {}),
-            postprocessing_chain=load(job_data["postprocessing_chain"]),
+            finished=job_data.get("finished", False),
+            postprocessing_chain=postprocessing_chain,
         )
 
-    async def list_pending(self) -> list[BatchJob]:
+    async def list(self, pending: bool = True) -> list[BatchJob]:
+        keep_all_results = not pending
         results = []
         for path in self.storage_dir.glob("*.json"):
             job_id = path.stem
             item = await self.get(job_id)
             if item is not None:
-                results.append(item)
+                if keep_all_results or not item.finished:
+                    results.append(item)
         return results
 
     async def delete(self, job_id: str) -> None:

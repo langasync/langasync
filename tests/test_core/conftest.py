@@ -1,5 +1,9 @@
 """Shared test fixtures for core module tests."""
 
+import os
+import shutil
+from pathlib import Path
+
 import pytest
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -118,3 +122,15 @@ def str_parser() -> StrOutputParser:
 def mock_retriever() -> MockRetriever:
     """Return a mock retriever."""
     return MockRetriever()
+
+
+@pytest.fixture(autouse=True)
+def clean_test_storage():
+    """Clean up test storage directory before and after each test."""
+    storage_dir = Path(os.environ.get("LANGASYNC_STORAGE_DIR", ".test_storage"))
+    if storage_dir.exists():
+        shutil.rmtree(storage_dir)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    yield
+    if storage_dir.exists():
+        shutil.rmtree(storage_dir)
