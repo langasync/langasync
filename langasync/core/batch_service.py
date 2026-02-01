@@ -13,6 +13,7 @@ from langasync.core.batch_api import (
     BatchApiJob,
     BatchStatusInfo,
     FINISHED_STATUSES,
+    BatchStatus,
     BatchResponse,
 )
 from langasync.core.batch_job_repository import BatchJob, BatchJobRepository
@@ -161,20 +162,28 @@ class BatchJobService:
         contents = [r.content for r in results]
         return await self.postprocessing_chain.abatch(contents)
 
-    async def _mark_as_finished(self):
+    async def _mark_as_finished(self, status: BatchStatus):
         batch_job = await self.repository.get(self.batch_api_job.id)
-        if batch_job is not None:
-            batch_job.finished = True
-            await self.repository.save(batch_job)
+        if batch_job is None:
+            return
+        batch_job.finished = True
+        batch_job.status = status
+        await self.repository.save(batch_job)
 
     async def get_results(self):
         batch_status = await self.batch_api_adapter.get_status(self.batch_api_job)
-        if batch_status.status in FINISHED_STATUSES:
+        if batch_status.status == BatchStatus.COMPLETED:
             results = await self.batch_api_adapter.get_results(self.batch_api_job)
             processed_results = await self._postprocess(results)
-            await self._mark_as_finished()
+            await self._mark_as_finished(BatchStatus.COMPLETED)
             return ProcessedResults(
                 job_id=self.batch_api_job.id, results=processed_results, status_info=batch_status
+            )
+        # mustve failed otherwise if in FINISHED_STATUSES
+        elif batch_status.status in FINISHED_STATUSES:
+            await self._mark_as_finished(batch_status.status)
+            return ProcessedResults(
+                job_id=self.batch_api_job.id, results=None, status_info=batch_status
             )
         else:
             return ProcessedResults(
@@ -183,5 +192,5 @@ class BatchJobService:
 
     async def cancel(self):
         await self.batch_api_adapter.cancel(self.batch_api_job)
-        await self._mark_as_finished()
+        await self._mark_as_finished(BatchStatus.CANCELLED)
         return True

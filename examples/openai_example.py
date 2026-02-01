@@ -19,11 +19,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(name)s - %(message)s")
+logging.getLogger("langasync").setLevel(logging.INFO)
+logging.getLogger("langasync").addHandler(logging.StreamHandler())
 
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 
 from langasync.core import FileSystemBatchJobRepository, batch_chain, BatchPoller
 from langasync.core.batch_api import BatchStatus
@@ -32,13 +34,27 @@ from langasync.core.batch_api import BatchStatus
 JOBS_DIR = Path(__file__).parent / ".batch_jobs"
 
 
+class CountryInfo(BaseModel):
+    """Structured information about a country."""
+
+    capital: str = Field(description="The capital city")
+    population_millions: float = Field(description="Approximate population in millions")
+    continent: str = Field(description="The continent the country is in")
+    fun_fact: str = Field(description="An interesting fact about this country")
+
+
 async def run():
     """Submit a new batch job."""
-    prompt = ChatPromptTemplate.from_template(
-        "What is the capital of {country}? Answer in one word."
-    )
+    parser = PydanticOutputParser(pydantic_object=CountryInfo)
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a helpful assistant that provides country information."),
+            ("user", "Give me information about {country}.\n\n{format_instructions}"),
+        ]
+    ).partial(format_instructions=parser.get_format_instructions())
+
     model = ChatOpenAI(model="gpt-4o-mini")
-    parser = StrOutputParser()
 
     chain = prompt | model | parser
     repository = FileSystemBatchJobRepository(JOBS_DIR)
@@ -48,6 +64,8 @@ async def run():
         {"country": "France"},
         {"country": "Japan"},
         {"country": "Brazil"},
+        {"country": "Kenya"},
+        {"country": "Australia"},
     ]
 
     print(f"Submitting batch with {len(inputs)} inputs...")
@@ -65,7 +83,9 @@ async def fetch():
     async for result in poller.wait_all():
         status = result.status_info.status
         if status == BatchStatus.COMPLETED:
-            print(f"\nJob {result.job_id} completed: {result.results}")
+            print(f"\nJob {result.job_id} completed:")
+            for result in result.results:
+                print(result)
         else:
             print(f"\nJob {result.job_id}: {status.value}")
 

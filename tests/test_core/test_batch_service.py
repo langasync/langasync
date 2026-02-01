@@ -49,6 +49,35 @@ class MockInProgressApiAdapter(BatchApiAdapterInterface):
         return True
 
 
+class MockFailedApiAdapter(BatchApiAdapterInterface):
+    """Mock adapter that returns FAILED status."""
+
+    def __init__(self, status: BatchStatus = BatchStatus.FAILED, total: int = 10, failed: int = 10):
+        self._status = status
+        self.total = total
+        self.failed = failed
+
+    async def create_batch(self, inputs, language_model) -> BatchApiJob:
+        raise NotImplementedError("Not needed for these tests")
+
+    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+        return BatchStatusInfo(
+            status=self._status,
+            total=self.total,
+            completed=0,
+            failed=self.failed,
+        )
+
+    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
+        return []
+
+    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+        return []
+
+    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
+        return True
+
+
 @pytest.fixture
 def repository(tmp_path: Path) -> FileSystemBatchJobRepository:
     """Create a repository using a temporary directory."""
@@ -554,3 +583,181 @@ class TestBatchJobServiceCancel:
         await service.cancel()
 
         assert mock_adapter.cancel_called_with == batch_api_job
+
+
+class TestBatchJobServiceFailure:
+    """Tests for BatchJobService handling of failed batch jobs."""
+
+    @pytest.mark.asyncio
+    async def test_get_results_returns_none_when_failed(
+        self, repository: FileSystemBatchJobRepository, postprocessing_chain
+    ):
+        """get_results() returns None results when batch has failed."""
+        mock_adapter = MockFailedApiAdapter(status=BatchStatus.FAILED)
+
+        job = BatchJob(
+            id="failed-job",
+            provider="none",
+            created_at=datetime.now(),
+            postprocessing_chain=postprocessing_chain,
+            finished=False,
+        )
+        await repository.save(job)
+
+        batch_api_job = BatchApiJob(
+            id="failed-job",
+            provider="none",
+            created_at=datetime.now(),
+        )
+        service = BatchJobService(
+            batch_api_job=batch_api_job,
+            batch_api_adapter=mock_adapter,
+            postprocessing_chain=postprocessing_chain,
+            repository=repository,
+        )
+
+        result = await service.get_results()
+
+        assert result.results is None
+        assert result.status_info.status == BatchStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_get_results_marks_failed_job_as_finished(
+        self, repository: FileSystemBatchJobRepository, postprocessing_chain
+    ):
+        """get_results() marks failed jobs as finished in the repository."""
+        mock_adapter = MockFailedApiAdapter(status=BatchStatus.FAILED)
+
+        job = BatchJob(
+            id="failed-job-2",
+            provider="none",
+            created_at=datetime.now(),
+            postprocessing_chain=postprocessing_chain,
+            finished=False,
+        )
+        await repository.save(job)
+
+        batch_api_job = BatchApiJob(
+            id="failed-job-2",
+            provider="none",
+            created_at=datetime.now(),
+        )
+        service = BatchJobService(
+            batch_api_job=batch_api_job,
+            batch_api_adapter=mock_adapter,
+            postprocessing_chain=postprocessing_chain,
+            repository=repository,
+        )
+
+        await service.get_results()
+
+        job_after = await repository.get("failed-job-2")
+        assert job_after is not None
+        assert job_after.finished is True
+
+    @pytest.mark.asyncio
+    async def test_get_results_stores_failed_status(
+        self, repository: FileSystemBatchJobRepository, postprocessing_chain
+    ):
+        """get_results() stores the FAILED status in the repository."""
+        mock_adapter = MockFailedApiAdapter(status=BatchStatus.FAILED)
+
+        job = BatchJob(
+            id="failed-job-3",
+            provider="none",
+            created_at=datetime.now(),
+            postprocessing_chain=postprocessing_chain,
+            finished=False,
+        )
+        await repository.save(job)
+
+        batch_api_job = BatchApiJob(
+            id="failed-job-3",
+            provider="none",
+            created_at=datetime.now(),
+        )
+        service = BatchJobService(
+            batch_api_job=batch_api_job,
+            batch_api_adapter=mock_adapter,
+            postprocessing_chain=postprocessing_chain,
+            repository=repository,
+        )
+
+        await service.get_results()
+
+        job_after = await repository.get("failed-job-3")
+        assert job_after is not None
+        assert job_after.status == BatchStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_get_results_handles_expired_status(
+        self, repository: FileSystemBatchJobRepository, postprocessing_chain
+    ):
+        """get_results() handles EXPIRED status correctly."""
+        mock_adapter = MockFailedApiAdapter(status=BatchStatus.EXPIRED)
+
+        job = BatchJob(
+            id="expired-job",
+            provider="none",
+            created_at=datetime.now(),
+            postprocessing_chain=postprocessing_chain,
+            finished=False,
+        )
+        await repository.save(job)
+
+        batch_api_job = BatchApiJob(
+            id="expired-job",
+            provider="none",
+            created_at=datetime.now(),
+        )
+        service = BatchJobService(
+            batch_api_job=batch_api_job,
+            batch_api_adapter=mock_adapter,
+            postprocessing_chain=postprocessing_chain,
+            repository=repository,
+        )
+
+        result = await service.get_results()
+
+        assert result.results is None
+        assert result.status_info.status == BatchStatus.EXPIRED
+
+        job_after = await repository.get("expired-job")
+        assert job_after is not None
+        assert job_after.finished is True
+        assert job_after.status == BatchStatus.EXPIRED
+
+    @pytest.mark.asyncio
+    async def test_cancel_stores_cancelled_status(
+        self, repository: FileSystemBatchJobRepository, postprocessing_chain
+    ):
+        """cancel() stores the CANCELLED status in the repository."""
+        mock_adapter = MockInProgressApiAdapter()
+
+        job = BatchJob(
+            id="cancel-status-job",
+            provider="none",
+            created_at=datetime.now(),
+            postprocessing_chain=postprocessing_chain,
+            finished=False,
+        )
+        await repository.save(job)
+
+        batch_api_job = BatchApiJob(
+            id="cancel-status-job",
+            provider="none",
+            created_at=datetime.now(),
+        )
+        service = BatchJobService(
+            batch_api_job=batch_api_job,
+            batch_api_adapter=mock_adapter,
+            postprocessing_chain=postprocessing_chain,
+            repository=repository,
+        )
+
+        await service.cancel()
+
+        job_after = await repository.get("cancel-status-job")
+        assert job_after is not None
+        assert job_after.finished is True
+        assert job_after.status == BatchStatus.CANCELLED

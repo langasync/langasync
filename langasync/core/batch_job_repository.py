@@ -9,7 +9,7 @@ from typing import Any
 import cloudpickle
 from langchain_core.runnables import Runnable
 
-from langasync.core.batch_api import Provider
+from langasync.core.batch_api import Provider, BatchStatus
 
 
 @dataclass
@@ -21,6 +21,7 @@ class BatchJob:
     created_at: datetime
     postprocessing_chain: Runnable
     finished: bool = False
+    status: BatchStatus = BatchStatus.PENDING
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -89,6 +90,7 @@ class FileSystemBatchJobRepository(BatchJobRepository):
             "created_at": batch_job.created_at.isoformat(),
             "metadata": batch_job.metadata,
             "finished": batch_job.finished,
+            "status": batch_job.status,
             "postprocessing_chain": chain_b64,
         }
         path = self._job_path(batch_job.id)
@@ -112,6 +114,7 @@ class FileSystemBatchJobRepository(BatchJobRepository):
             created_at=datetime.fromisoformat(job_data["created_at"]),
             metadata=job_data.get("metadata", {}),
             finished=job_data.get("finished", False),
+            status=BatchStatus(job_data["status"]) if "status" in job_data else BatchStatus.PENDING,
             postprocessing_chain=postprocessing_chain,
         )
 

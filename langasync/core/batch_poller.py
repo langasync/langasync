@@ -67,6 +67,10 @@ class BatchPoller:
             is_continue_fn = lambda _services_to_watch: len(_services_to_watch) > 0
 
         while is_continue_fn(services_to_watch):
+            # sleep before next iteration
+            await asyncio.sleep(self.poll_interval)
+
+            # check if any completed
             completed = []
             for job_id, service in services_to_watch.items():
                 result = await service.get_results()
@@ -82,6 +86,3 @@ class BatchPoller:
                 # new services to watch that may have been recently submitted
                 new_services_to_watch = await self._get_new_pending_services_to_watch_dict()
                 services_to_watch = {**services_to_watch, **new_services_to_watch}
-
-            # sleep before next iteration
-            await asyncio.sleep(self.poll_interval)
