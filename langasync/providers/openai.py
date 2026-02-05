@@ -10,7 +10,7 @@ import httpx
 from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.messages.utils import convert_to_openai_messages
-
+from langasync.core.exceptions import provider_error_handling
 from langasync.core.batch_api import (
     BatchApiAdapterInterface,
     BatchApiJob,
@@ -20,6 +20,7 @@ from langasync.core.batch_api import (
     LanguageModelType,
     Provider,
 )
+from langasync.core.exceptions import provider_error_handling
 
 
 def _to_openai_messages(inp: LanguageModelInput) -> list[dict]:
@@ -119,6 +120,7 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
         response.raise_for_status()
         return response.text
 
+    @provider_error_handling
     async def create_batch(
         self,
         inputs: list[LanguageModelInput],
@@ -164,6 +166,7 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
             metadata={"input_file_id": file_id},
         )
 
+    @provider_error_handling
     async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
         """Get the current status of a batch job."""
         response = await self._client.get(f"{self.base_url}/batches/{batch_api_job.id}")
@@ -179,6 +182,7 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
             failed=request_counts.get("failed", 0),
         )
 
+    @provider_error_handling
     async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
         """List recent batch jobs."""
         response = await self._client.get(
@@ -231,6 +235,7 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
             usage=body.get("usage"),
         )
 
+    @provider_error_handling
     async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
         """Get results from a completed batch job."""
         response = await self._client.get(f"{self.base_url}/batches/{batch_api_job.id}")
@@ -262,11 +267,8 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
         results.sort(key=lambda r: int(r.custom_id) if r.custom_id.isdigit() else 0)
         return results
 
-    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
+    @provider_error_handling
+    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
         """Cancel a batch job."""
-        try:
-            response = await self._client.post(f"{self.base_url}/batches/{batch_api_job.id}/cancel")
-            response.raise_for_status()
-            return True
-        except httpx.HTTPStatusError:
-            return False
+        await self._client.post(f"{self.base_url}/batches/{batch_api_job.id}/cancel")
+        return await self.get_status(batch_api_job)

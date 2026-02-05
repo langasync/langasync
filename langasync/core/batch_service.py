@@ -1,11 +1,18 @@
 from __future__ import annotations
+import asyncio
 
 from typing import Any
 
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.runnables import Runnable
 
-from langasync.core.exceptions import UnsupportedProviderError
+from langasync.core.exceptions import (
+    error_handling,
+    UnsupportedProviderError,
+    FailedLLMOutputError,
+    FailedPostProcessingError,
+    FailedPreProcessingError,
+)
 from pydantic import BaseModel
 
 from langasync.core.batch_api import (
@@ -76,6 +83,7 @@ class BatchJobService:
         return self.batch_api_job.id
 
     @classmethod
+    @error_handling
     async def create(
         cls,
         inputs: list[Any],
@@ -85,7 +93,11 @@ class BatchJobService:
         repository: BatchJobRepository,
     ) -> "BatchJobService":
         batch_api_adapter = _get_adapter_from_model(model)
-        preprocessed_inputs = await preprocessing_chain.abatch(inputs)
+        try:
+            preprocessed_inputs = await preprocessing_chain.abatch(inputs)
+        except Exception as e:
+            raise FailedPreProcessingError(str(e))
+
         batch_api_job = await batch_api_adapter.create_batch(preprocessed_inputs, model)
 
         batch_job = BatchJob(
@@ -100,6 +112,7 @@ class BatchJobService:
         return cls(batch_api_job, batch_api_adapter, postprocessing_chain, repository)
 
     @classmethod
+    @error_handling
     async def get(
         cls,
         job_id: str,
@@ -128,6 +141,7 @@ class BatchJobService:
         return cls(batch_api_job, batch_api_adapter, batch_job.postprocessing_chain, repository)
 
     @classmethod
+    @error_handling
     async def list(
         cls,
         repository: BatchJobRepository,
@@ -159,38 +173,54 @@ class BatchJobService:
 
     async def _postprocess(self, results: list[BatchResponse]) -> list[Any]:
         """Run the postprocessing chain on batch results."""
-        contents = [r.content for r in results]
-        return await self.postprocessing_chain.abatch(contents)
 
-    async def _mark_as_finished(self, status: BatchStatus):
+        async def _process_example_if_successful(response: BatchResponse):
+            if response.success:
+                try:
+                    return await self.postprocessing_chain.ainvoke(response.content)
+                except Exception as e:
+                    return FailedPostProcessingError(str(e))
+            else:
+                return FailedLLMOutputError(str(response.error))
+
+        outputs = await asyncio.gather(*[_process_example_if_successful(r) for r in results])
+        return outputs
+
+    async def _mark_as_finished(self, status_info: BatchStatusInfo):
         batch_job = await self.repository.get(self.batch_api_job.id)
         if batch_job is None:
             return
         batch_job.finished = True
-        batch_job.status = status
+        batch_job.status = status_info.status
+        batch_job.total = status_info.total
+        batch_job.complete = status_info.completed
         await self.repository.save(batch_job)
 
+    @error_handling
     async def get_results(self):
-        batch_status = await self.batch_api_adapter.get_status(self.batch_api_job)
-        if batch_status.status == BatchStatus.COMPLETED:
+        batch_status_info = await self.batch_api_adapter.get_status(self.batch_api_job)
+        if batch_status_info.status == BatchStatus.COMPLETED:
             results = await self.batch_api_adapter.get_results(self.batch_api_job)
             processed_results = await self._postprocess(results)
-            await self._mark_as_finished(BatchStatus.COMPLETED)
+            await self._mark_as_finished(batch_status_info)
             return ProcessedResults(
-                job_id=self.batch_api_job.id, results=processed_results, status_info=batch_status
+                job_id=self.batch_api_job.id,
+                results=processed_results,
+                status_info=batch_status_info,
             )
         # mustve failed otherwise if in FINISHED_STATUSES
-        elif batch_status.status in FINISHED_STATUSES:
-            await self._mark_as_finished(batch_status.status)
+        elif batch_status_info.status in FINISHED_STATUSES:
+            await self._mark_as_finished(batch_status_info)
             return ProcessedResults(
-                job_id=self.batch_api_job.id, results=None, status_info=batch_status
+                job_id=self.batch_api_job.id, results=None, status_info=batch_status_info
             )
         else:
             return ProcessedResults(
-                job_id=self.batch_api_job.id, results=None, status_info=batch_status
+                job_id=self.batch_api_job.id, results=None, status_info=batch_status_info
             )
 
+    @error_handling
     async def cancel(self):
-        await self.batch_api_adapter.cancel(self.batch_api_job)
-        await self._mark_as_finished(BatchStatus.CANCELLED)
+        batch_status_info = await self.batch_api_adapter.cancel(self.batch_api_job)
+        await self._mark_as_finished(batch_status_info)
         return True

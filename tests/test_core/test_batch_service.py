@@ -8,6 +8,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 from langasync.core.batch_service import BatchJobService, ProcessedResults
+from langasync.core.exceptions import FailedLLMOutputError, FailedPostProcessingError, FailedPreProcessingError
 from langasync.core.batch_job_repository import BatchJob, FileSystemBatchJobRepository
 from langasync.core.batch_api import (
     BatchApiAdapterInterface,
@@ -44,9 +45,14 @@ class MockInProgressApiAdapter(BatchApiAdapterInterface):
     async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
         return []
 
-    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
+    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
         self.cancel_called_with = batch_api_job
-        return True
+        return BatchStatusInfo(
+            status=BatchStatus.CANCELLED,
+            total=0,
+            completed=0,
+            failed=0,
+        )
 
 
 class MockFailedApiAdapter(BatchApiAdapterInterface):
@@ -74,8 +80,53 @@ class MockFailedApiAdapter(BatchApiAdapterInterface):
     async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
         return []
 
-    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
-        return True
+    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+        return BatchStatusInfo(
+            status=BatchStatus.CANCELLED,
+            total=self.total,
+            completed=0,
+            failed=self.failed,
+        )
+
+
+class MockAdapterWithFailedResponse(BatchApiAdapterInterface):
+    """Mock adapter that returns a mix of successful and failed responses."""
+
+    def __init__(self, failed_indices: list[int] = None):
+        self.failed_indices = failed_indices if failed_indices is not None else [1]
+
+    async def create_batch(self, inputs, language_model) -> BatchApiJob:
+        raise NotImplementedError()
+
+    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+        return BatchStatusInfo(
+            status=BatchStatus.COMPLETED,
+            total=3,
+            completed=3,
+            failed=0,
+        )
+
+    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
+        return []
+
+    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+        return [
+            BatchResponse(
+                custom_id=str(i),
+                success=(i not in self.failed_indices),
+                content=f"result_{i}" if i not in self.failed_indices else None,
+                error={"message": f"Error for item {i}"} if i in self.failed_indices else None,
+            )
+            for i in range(3)
+        ]
+
+    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+        return BatchStatusInfo(
+            status=BatchStatus.CANCELLED,
+            total=3,
+            completed=0,
+            failed=0,
+        )
 
 
 @pytest.fixture
@@ -761,3 +812,107 @@ class TestBatchJobServiceFailure:
         assert job_after is not None
         assert job_after.finished is True
         assert job_after.status == BatchStatus.CANCELLED
+
+
+class TestPostprocessingErrors:
+    """Tests for postprocessing error handling."""
+
+    @pytest.mark.asyncio
+    async def test_failed_response_returns_failed_llm_output_error(
+        self, repository: FileSystemBatchJobRepository, postprocessing_chain
+    ):
+        """When response.success=False, returns FailedLLMOutputError."""
+        mock_adapter = MockAdapterWithFailedResponse(failed_indices=[1])
+
+        job = BatchJob(
+            id="failed-response-job",
+            provider="none",
+            created_at=datetime.now(),
+            postprocessing_chain=postprocessing_chain,
+            finished=False,
+        )
+        await repository.save(job)
+
+        batch_api_job = BatchApiJob(
+            id="failed-response-job",
+            provider="none",
+            created_at=datetime.now(),
+        )
+        service = BatchJobService(
+            batch_api_job=batch_api_job,
+            batch_api_adapter=mock_adapter,
+            postprocessing_chain=postprocessing_chain,
+            repository=repository,
+        )
+
+        result = await service.get_results()
+
+        assert result.results[0] == "RESULT_0"
+        assert isinstance(result.results[1], FailedLLMOutputError)
+        assert result.results[2] == "RESULT_2"
+
+    @pytest.mark.asyncio
+    async def test_postprocessing_failure_returns_failed_postprocessing_error(
+        self, repository: FileSystemBatchJobRepository
+    ):
+        """When postprocessing chain raises, returns FailedPostProcessingError."""
+        mock_adapter = MockAdapterWithFailedResponse(failed_indices=[])
+
+        def failing_parser(x):
+            if "1" in str(x):
+                raise ValueError("Parse error for item 1")
+            return x.upper()
+
+        failing_chain = RunnableLambda(failing_parser)
+
+        job = BatchJob(
+            id="failing-postprocess-job",
+            provider="none",
+            created_at=datetime.now(),
+            postprocessing_chain=failing_chain,
+            finished=False,
+        )
+        await repository.save(job)
+
+        batch_api_job = BatchApiJob(
+            id="failing-postprocess-job",
+            provider="none",
+            created_at=datetime.now(),
+        )
+        service = BatchJobService(
+            batch_api_job=batch_api_job,
+            batch_api_adapter=mock_adapter,
+            postprocessing_chain=failing_chain,
+            repository=repository,
+        )
+
+        result = await service.get_results()
+
+        assert result.results[0] == "RESULT_0"
+        assert isinstance(result.results[1], FailedPostProcessingError)
+        assert result.results[2] == "RESULT_2"
+
+
+class TestPreprocessingErrors:
+    """Tests for preprocessing error handling."""
+
+    @pytest.mark.asyncio
+    async def test_preprocessing_failure_raises_failed_preprocessing_error(
+        self, repository: FileSystemBatchJobRepository, postprocessing_chain
+    ):
+        """When preprocessing chain raises, raises FailedPreProcessingError."""
+        def failing_preprocessor(x):
+            raise ValueError("Preprocessing failed")
+
+        failing_chain = RunnableLambda(failing_preprocessor)
+
+        with pytest.raises(FailedPreProcessingError) as exc_info:
+            await BatchJobService.create(
+                inputs=["a", "b", "c"],
+                model=None,
+                preprocessing_chain=failing_chain,
+                postprocessing_chain=postprocessing_chain,
+                repository=repository,
+            )
+
+        assert "Preprocessing failed" in str(exc_info.value)

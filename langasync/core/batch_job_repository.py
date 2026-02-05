@@ -22,6 +22,8 @@ class BatchJob:
     postprocessing_chain: Runnable
     finished: bool = False
     status: BatchStatus = BatchStatus.PENDING
+    total: int | None = None
+    complete: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -91,6 +93,8 @@ class FileSystemBatchJobRepository(BatchJobRepository):
             "metadata": batch_job.metadata,
             "finished": batch_job.finished,
             "status": batch_job.status,
+            "total": batch_job.total,
+            "complete": batch_job.complete,
             "postprocessing_chain": chain_b64,
         }
         path = self._job_path(batch_job.id)
@@ -115,6 +119,8 @@ class FileSystemBatchJobRepository(BatchJobRepository):
             metadata=job_data.get("metadata", {}),
             finished=job_data.get("finished", False),
             status=BatchStatus(job_data["status"]) if "status" in job_data else BatchStatus.PENDING,
+            total=job_data.get("total"),
+            complete=job_data.get("complete"),
             postprocessing_chain=postprocessing_chain,
         )
 

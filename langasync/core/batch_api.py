@@ -136,13 +136,13 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
+    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
         """Cancel a batch job.
 
         Args:
             batch_api_job: The batch job to cancel
 
         Returns:
-            True if cancellation was successful, False otherwise
+            BatchStatusInfo with the job's status after cancellation
         """
         pass

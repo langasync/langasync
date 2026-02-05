@@ -2,8 +2,6 @@
 
 from .exceptions import (
     LangAsyncError,
-    ProviderError,
-    ConfigurationError,
     UnsupportedChainError,
     UnsupportedProviderError,
 )
@@ -24,8 +22,6 @@ from .get_parts_from_chain import get_parts_from_chain, ChainParts
 
 __all__ = [
     "LangAsyncError",
-    "ProviderError",
-    "ConfigurationError",
     "UnsupportedChainError",
     "UnsupportedProviderError",
     "BatchApiAdapterInterface",

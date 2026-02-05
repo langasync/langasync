@@ -8,7 +8,7 @@ from pathlib import Path
 
 import cloudpickle
 from langchain_core.language_models import LanguageModelInput
-
+from langasync.core.exceptions import provider_error_handling
 from langasync.core.batch_api import (
     BatchApiAdapterInterface,
     BatchApiJob,
@@ -66,6 +66,7 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
             persistence = FileSystemNoModelApiPersistence(storage_dir / "no_model_metadata")
         self._persistence = persistence
 
+    @provider_error_handling
     async def create_batch(
         self,
         inputs: list[LanguageModelInput],
@@ -80,6 +81,7 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
         await self._persistence.save(batch_id, inputs)
         return batch_api_job
 
+    @provider_error_handling
     async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
         inputs = await self._persistence.load(batch_api_job.id)
         return BatchStatusInfo(
@@ -90,8 +92,9 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
         )
 
     async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
-        return []
+        raise NotImplementedError("list_batches not implemented on NoModelBatchApiAdapter")
 
+    @provider_error_handling
     async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
         inputs = await self._persistence.load(batch_api_job.id)
         return [
@@ -103,5 +106,12 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
             for i, inp in enumerate(inputs)
         ]
 
-    async def cancel(self, batch_api_job: BatchApiJob) -> bool:
-        return False  # Already completed, can't cancel
+    @provider_error_handling
+    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+        inputs = await self._persistence.load(batch_api_job.id)
+        return BatchStatusInfo(
+            status=BatchStatus.CANCELLED,
+            total=len(inputs),
+            completed=len(inputs),
+            failed=0,
+        )

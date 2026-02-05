@@ -1,4 +1,4 @@
-"""Exception classes for langasync."""
+import functools
 
 
 class LangAsyncError(Exception):
@@ -7,26 +7,32 @@ class LangAsyncError(Exception):
     pass
 
 
-class ProviderError(LangAsyncError):
-    """Exception raised when a provider encounters an error."""
+class FailedPreProcessingError(LangAsyncError):
+    """Exception raised when the preprocessing chain fails."""
 
     pass
 
 
-class ConfigurationError(LangAsyncError):
-    """Exception raised when configuration is invalid."""
+class FailedLLMOutputError(LangAsyncError):
+    """Exception raised when the LLM returns an error or invalid response."""
 
     pass
 
 
-class AuthenticationError(ProviderError):
+class FailedPostProcessingError(LangAsyncError):
+    """Exception raised when the output parser fails to process LLM output."""
+
+    pass
+
+
+class AuthenticationError(LangAsyncError):
     """Exception raised when authentication fails."""
 
     pass
 
 
-class RateLimitError(ProviderError):
-    """Exception raised when rate limit is exceeded."""
+class BatchProviderApiError(LangAsyncError):
+    """Exception raised when provider llm api fails."""
 
     pass
 
@@ -47,3 +53,20 @@ class UnsupportedProviderError(LangAsyncError):
     """Exception raised when a provider is not supported or not recognized."""
 
     pass
+
+
+def error_handling(fn, default_exception_class=LangAsyncError):
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except LangAsyncError:
+            raise
+        except Exception as e:
+            raise default_exception_class(str(e)) from e
+
+    return wrapper
+
+
+def provider_error_handling(fn):
+    return error_handling(fn, default_exception_class=BatchProviderApiError)
