@@ -5,7 +5,7 @@ If these tests fail after a langchain-anthropic upgrade, the underlying function
 signature or behavior has changed and our adapter needs updating.
 """
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from langasync.providers.anthropic import custom_convert_to_anthropic_messages
 
@@ -22,6 +22,21 @@ class TestConvertToAnthropicMessages:
         system, messages = custom_convert_to_anthropic_messages([HumanMessage("Hello")])
         assert system is None
         assert messages == [{"role": "user", "content": "Hello"}]
+
+    def test_single_human_message_without_list(self):
+        system, messages = custom_convert_to_anthropic_messages(HumanMessage("Hello"))
+        assert system is None
+        assert messages == [{"role": "user", "content": "Hello"}]
+
+    def test_single_system_message_without_list(self):
+        system, messages = custom_convert_to_anthropic_messages(SystemMessage("You are helpful"))
+        assert system == "You are helpful"
+        assert messages == []
+
+    def test_single_ai_message_without_list(self):
+        system, messages = custom_convert_to_anthropic_messages(AIMessage("Hi there"))
+        assert system is None
+        assert messages == [{"role": "assistant", "content": "Hi there"}]
 
     def test_system_message_extracted_separately(self):
         system, messages = custom_convert_to_anthropic_messages(
@@ -103,3 +118,65 @@ class TestConvertToAnthropicMessages:
         result = custom_convert_to_anthropic_messages([HumanMessage("Hello")])
         assert isinstance(result, tuple)
         assert len(result) == 2
+
+    def test_ai_message_with_tool_calls(self):
+        """AI message with tool_calls gets converted to tool_use blocks."""
+        ai_with_tools = AIMessage(
+            content="",
+            tool_calls=[{"name": "get_weather", "args": {"location": "NYC"}, "id": "call_123"}],
+        )
+        system, messages = custom_convert_to_anthropic_messages(
+            [HumanMessage("What is the weather?"), ai_with_tools]
+        )
+        assert system is None
+        assert messages == [
+            {"role": "user", "content": "What is the weather?"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "get_weather",
+                        "input": {"location": "NYC"},
+                        "id": "call_123",
+                    }
+                ],
+            },
+        ]
+
+    def test_tool_message_becomes_tool_result(self):
+        """ToolMessage gets converted to tool_result block."""
+        ai_with_tools = AIMessage(
+            content="",
+            tool_calls=[{"name": "get_weather", "args": {"location": "NYC"}, "id": "call_123"}],
+        )
+        tool_response = ToolMessage(content="72 degrees", tool_call_id="call_123")
+        system, messages = custom_convert_to_anthropic_messages(
+            [HumanMessage("What is the weather?"), ai_with_tools, tool_response]
+        )
+        assert system is None
+        assert messages == [
+            {"role": "user", "content": "What is the weather?"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "get_weather",
+                        "input": {"location": "NYC"},
+                        "id": "call_123",
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "content": "72 degrees",
+                        "tool_use_id": "call_123",
+                        "is_error": False,
+                    }
+                ],
+            },
+        ]

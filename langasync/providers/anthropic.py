@@ -9,7 +9,7 @@ import httpx
 from langchain_anthropic.chat_models import _format_messages
 from langchain_anthropic.output_parsers import extract_tool_calls
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompt_values import PromptValue
 
 from langasync.exceptions import provider_error_handling
@@ -32,6 +32,10 @@ def custom_convert_to_anthropic_messages(inp: LanguageModelInput):
     # Handle string input
     if isinstance(inp, str):
         inp = [HumanMessage(content=inp)]
+
+    # Handle single message (wrap in list)
+    if isinstance(inp, BaseMessage):
+        inp = [inp]
 
     # Use LangChain's _format_messages to convert
     system, messages = _format_messages(inp)
