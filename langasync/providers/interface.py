@@ -70,7 +70,7 @@ class BatchStatusInfo(BaseModel):
 
 
 @dataclass
-class BatchApiJob:
+class ProviderJob:
     """Simple data container for batch job information."""
 
     id: str
@@ -79,7 +79,7 @@ class BatchApiJob:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-class BatchApiAdapterInterface(ABC):
+class ProviderJobAdapterInterface(ABC):
     """Abstract interface for provider-specific batch API implementations."""
 
     @abstractmethod
@@ -88,7 +88,7 @@ class BatchApiAdapterInterface(ABC):
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
         model_bindings: dict | None = None,
-    ) -> BatchApiJob:
+    ) -> ProviderJob:
         """Create a new batch job.
 
         Args:
@@ -103,7 +103,7 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         """Get the current status of a batch job.
 
         Args:
@@ -115,7 +115,7 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
+    async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         """List recent batch jobs.
 
         Args:
@@ -127,7 +127,7 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         """Get results from a completed batch job.
 
         Args:
@@ -139,7 +139,7 @@ class BatchApiAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         """Cancel a batch job.
 
         Args:

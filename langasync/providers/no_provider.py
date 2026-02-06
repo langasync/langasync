@@ -9,7 +9,6 @@ from pathlib import Path
 import cloudpickle
 from langchain_core.language_models import LanguageModelInput
 
-from langasync.exceptions import provider_error_handling
 from langasync.providers.interface import (
     ProviderJobAdapterInterface,
     ProviderJob,
@@ -67,12 +66,10 @@ class NoModelProviderJobAdapter(ProviderJobAdapterInterface):
             persistence = FileSystemNoModelApiPersistence(storage_dir / "no_model_metadata")
         self._persistence = persistence
 
-    @provider_error_handling
     async def create_batch(
         self,
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
-        model_bindings: dict | None = None,
     ) -> ProviderJob:
         batch_id = f"no-model-{uuid.uuid4()}"
         batch_api_job = ProviderJob(
@@ -83,7 +80,6 @@ class NoModelProviderJobAdapter(ProviderJobAdapterInterface):
         await self._persistence.save(batch_id, inputs)
         return batch_api_job
 
-    @provider_error_handling
     async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         inputs = await self._persistence.load(batch_api_job.id)
         return BatchStatusInfo(
@@ -94,9 +90,8 @@ class NoModelProviderJobAdapter(ProviderJobAdapterInterface):
         )
 
     async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
-        raise NotImplementedError("list_batches not implemented on NoModelProviderJobAdapter")
+        return []
 
-    @provider_error_handling
     async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         inputs = await self._persistence.load(batch_api_job.id)
         return [
@@ -108,12 +103,5 @@ class NoModelProviderJobAdapter(ProviderJobAdapterInterface):
             for i, inp in enumerate(inputs)
         ]
 
-    @provider_error_handling
-    async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
-        inputs = await self._persistence.load(batch_api_job.id)
-        return BatchStatusInfo(
-            status=BatchStatus.CANCELLED,
-            total=len(inputs),
-            completed=len(inputs),
-            failed=0,
-        )
+    async def cancel(self, batch_api_job: ProviderJob) -> bool:
+        return False  # Already completed, can't cancel

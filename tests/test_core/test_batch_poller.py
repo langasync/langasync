@@ -14,25 +14,25 @@ from langasync.core.batch_job_repository import BatchJob, FileSystemBatchJobRepo
 from langasync.providers.interface import (
     BatchStatus,
     BatchStatusInfo,
-    BatchApiJob,
+    ProviderJob,
     BatchResponse,
 )
 from langasync.providers import Provider
-from langasync.providers.none import NoModelBatchApiAdapter
+from langasync.providers.none import NoModelProviderJobAdapter
 
 
-class FailingBatchApiAdapter(NoModelBatchApiAdapter):
+class FailingProviderJobAdapter(NoModelProviderJobAdapter):
     """Adapter that returns FAILED status for testing."""
 
-    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         return BatchStatusInfo(status=BatchStatus.FAILED, total=1, completed=0, failed=1)
 
-    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         # Return empty results for failed job
         return []
 
 
-class DelayedCompletionAdapter(NoModelBatchApiAdapter):
+class DelayedCompletionAdapter(NoModelProviderJobAdapter):
     """Adapter that returns IN_PROGRESS for N calls, then COMPLETED."""
 
     def __init__(self, calls_until_complete: int = 2):
@@ -40,7 +40,7 @@ class DelayedCompletionAdapter(NoModelBatchApiAdapter):
         self.call_counts: dict[str, int] = {}
         self.calls_until_complete = calls_until_complete
 
-    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         job_id = batch_api_job.id
         self.call_counts[job_id] = self.call_counts.get(job_id, 0) + 1
 
@@ -93,7 +93,7 @@ class TestBatchPollerWaitAll:
         self, repository: FileSystemBatchJobRepository
     ):
         """wait_all() yields results from completed jobs."""
-        # Create a job using NoModelBatchApiAdapter (completes immediately)
+        # Create a job using NoModelProviderJobAdapter (completes immediately)
         chain = RunnableLambda(lambda x: x.upper())
         service = await BatchJobService.create(
             inputs=["hello", "world"],
@@ -309,7 +309,7 @@ class TestBatchPollerFailedJobs:
         # Patch registry to use failing adapter when resuming job
         with patch.dict(
             "langasync.providers.ADAPTER_REGISTRY",
-            {Provider.NONE: FailingBatchApiAdapter},
+            {Provider.NONE: FailingProviderJobAdapter},
         ):
             poller = BatchPoller(repository, poll_interval=0.01)
             results = [r async for r in poller.wait_all()]
@@ -331,7 +331,7 @@ class TestBatchPollerFailedJobs:
 
         with patch.dict(
             "langasync.providers.ADAPTER_REGISTRY",
-            {Provider.NONE: FailingBatchApiAdapter},
+            {Provider.NONE: FailingProviderJobAdapter},
         ):
             poller = BatchPoller(repository, poll_interval=0.01)
             _ = [r async for r in poller.wait_all()]

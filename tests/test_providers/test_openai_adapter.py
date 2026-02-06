@@ -1,4 +1,4 @@
-"""Unit tests for OpenAIBatchApiAdapter with mocked httpx calls."""
+"""Unit tests for OpenAIProviderJobAdapter with mocked httpx calls."""
 
 import json
 import re
@@ -9,13 +9,22 @@ from pytest_httpx import HTTPXMock
 
 from langchain_core.messages import AIMessage
 
-from langasync.providers.openai import OpenAIBatchApiAdapter
+from langasync.providers.openai import OpenAIProviderJobAdapter
 from langasync.providers.interface import (
-    BatchApiJob,
+    ProviderJob,
     BatchResponse,
     BatchStatus,
     BatchStatusInfo,
     Provider,
+)
+from tests.fixtures.openai_responses import (
+    openai_batch_response,
+    openai_batch_status_response,
+    openai_file_upload_response,
+    openai_output_line,
+    openai_error_output_line,
+    openai_tool_call_output_line,
+    openai_results_jsonl,
 )
 
 
@@ -28,7 +37,7 @@ BATCH_ID_URL = re.compile(r"https://api\.openai\.com/v1/batches/batch_abc123.*")
 @pytest.fixture
 def adapter():
     """Create OpenAI adapter with test API key."""
-    return OpenAIBatchApiAdapter(api_key="test-api-key")
+    return OpenAIProviderJobAdapter(api_key="test-api-key")
 
 
 @pytest.fixture
@@ -41,8 +50,8 @@ def mock_model():
 
 @pytest.fixture
 def sample_batch_job():
-    """Create a sample BatchApiJob for testing."""
-    return BatchApiJob(
+    """Create a sample ProviderJob for testing."""
+    return ProviderJob(
         id="batch_abc123",
         provider=Provider.OPENAI,
         created_at=datetime(2024, 1, 15, 12, 0, 0),
@@ -59,27 +68,24 @@ class TestCreateBatch:
         httpx_mock.add_response(
             method="POST",
             url=FILES_URL,
-            json={"id": "file-xyz789", "object": "file"},
+            json=openai_file_upload_response(file_id="file-xyz789"),
         )
 
         # Mock batch creation
         httpx_mock.add_response(
             method="POST",
             url=BATCHES_URL,
-            json={
-                "id": "batch_abc123",
-                "object": "batch",
-                "endpoint": "/v1/chat/completions",
-                "input_file_id": "file-xyz789",
-                "status": "validating",
-                "created_at": 1705320000,
-            },
+            json=openai_batch_response(
+                batch_id="batch_abc123",
+                status="validating",
+                input_file_id="file-xyz789",
+            ),
         )
 
         inputs = ["Hello, world!", "How are you?"]
         result = await adapter.create_batch(inputs, mock_model)
 
-        assert result == BatchApiJob(
+        assert result == ProviderJob(
             id="batch_abc123",
             provider=Provider.OPENAI,
             created_at=datetime.fromtimestamp(1705320000),
@@ -115,15 +121,12 @@ class TestCreateBatch:
         httpx_mock.add_response(
             method="POST",
             url=FILES_URL,
-            json={"id": "file-xyz789"},
+            json=openai_file_upload_response(file_id="file-xyz789"),
         )
         httpx_mock.add_response(
             method="POST",
             url=BATCHES_URL,
-            json={
-                "id": "batch_abc123",
-                "created_at": 1705320000,
-            },
+            json=openai_batch_response(batch_id="batch_abc123"),
         )
 
         bindings = {
@@ -132,7 +135,7 @@ class TestCreateBatch:
         }
         result = await adapter.create_batch(["Test"], mock_model, model_bindings=bindings)
 
-        assert result == BatchApiJob(
+        assert result == ProviderJob(
             id="batch_abc123",
             provider=Provider.OPENAI,
             created_at=datetime.fromtimestamp(1705320000),
@@ -166,11 +169,12 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "in_progress",
-                "request_counts": {"total": 100, "completed": 50, "failed": 0},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status="in_progress",
+                total=100,
+                completed=50,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -184,11 +188,12 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "completed",
-                "request_counts": {"total": 100, "completed": 100, "failed": 0},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status="completed",
+                total=100,
+                completed=100,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -202,11 +207,13 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "failed",
-                "request_counts": {"total": 100, "completed": 0, "failed": 100},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status="failed",
+                total=100,
+                completed=0,
+                failed=100,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -235,11 +242,12 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": openai_status,
-                "request_counts": {"total": 10, "completed": 5, "failed": 0},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status=openai_status,
+                total=10,
+                completed=5,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -255,50 +263,25 @@ class TestGetResults:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "completed",
-                "output_file_id": "file-output123",
-            },
+            json=openai_batch_response(
+                batch_id="batch_abc123",
+                status="completed",
+                output_file_id="file-output123",
+            ),
         )
 
         # Mock output file download
-        output_content = "\n".join(
-            [
-                json.dumps(
-                    {
-                        "custom_id": "0",
-                        "response": {
-                            "status_code": 200,
-                            "body": {
-                                "choices": [
-                                    {"message": {"role": "assistant", "content": "Hello!"}}
-                                ],
-                                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                            },
-                        },
-                    }
-                ),
-                json.dumps(
-                    {
-                        "custom_id": "1",
-                        "response": {
-                            "status_code": 200,
-                            "body": {
-                                "choices": [
-                                    {"message": {"role": "assistant", "content": "I'm fine!"}}
-                                ],
-                                "usage": {"prompt_tokens": 12, "completion_tokens": 8},
-                            },
-                        },
-                    }
-                ),
-            ]
-        )
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/files/file-output123/content",
-            text=output_content,
+            text=openai_results_jsonl(
+                [
+                    openai_output_line("0", content="Hello!"),
+                    openai_output_line(
+                        "1", content="I'm fine!", prompt_tokens=12, completion_tokens=8
+                    ),
+                ]
+            ),
         )
 
         results = await adapter.get_results(sample_batch_job)
@@ -308,13 +291,13 @@ class TestGetResults:
                 custom_id="0",
                 success=True,
                 content=AIMessage(content="Hello!"),
-                usage={"prompt_tokens": 10, "completion_tokens": 5},
+                usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
             ),
             BatchResponse(
                 custom_id="1",
                 success=True,
                 content=AIMessage(content="I'm fine!"),
-                usage={"prompt_tokens": 12, "completion_tokens": 8},
+                usage={"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20},
             ),
         ]
 
@@ -323,30 +306,23 @@ class TestGetResults:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "completed",
-                "output_file_id": "file-output123",
-                "error_file_id": "file-error123",
-            },
+            json=openai_batch_response(
+                batch_id="batch_abc123",
+                status="completed",
+                output_file_id="file-output123",
+                error_file_id="file-error123",
+            ),
         )
 
         # Output file with successful response
-        output_content = json.dumps(
-            {
-                "custom_id": "0",
-                "response": {
-                    "status_code": 200,
-                    "body": {
-                        "choices": [{"message": {"role": "assistant", "content": "Success!"}}],
-                    },
-                },
-            }
-        )
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/files/file-output123/content",
-            text=output_content,
+            text=openai_results_jsonl(
+                [
+                    openai_output_line("0", content="Success!"),
+                ]
+            ),
         )
 
         # Error file with failed response
@@ -369,6 +345,7 @@ class TestGetResults:
                 custom_id="0",
                 success=True,
                 content=AIMessage(content="Success!"),
+                usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
             ),
             BatchResponse(
                 custom_id="1",
@@ -384,45 +361,26 @@ class TestGetResults:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "completed",
-                "output_file_id": "file-output123",
-            },
+            json=openai_batch_response(
+                batch_id="batch_abc123",
+                status="completed",
+                output_file_id="file-output123",
+            ),
         )
 
-        output_content = json.dumps(
-            {
-                "custom_id": "0",
-                "response": {
-                    "status_code": 200,
-                    "body": {
-                        "choices": [
-                            {
-                                "message": {
-                                    "role": "assistant",
-                                    "content": None,
-                                    "tool_calls": [
-                                        {
-                                            "id": "call_123",
-                                            "type": "function",
-                                            "function": {
-                                                "name": "get_weather",
-                                                "arguments": '{"location": "NYC"}',
-                                            },
-                                        }
-                                    ],
-                                }
-                            }
-                        ],
-                    },
-                },
-            }
-        )
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/files/file-output123/content",
-            text=output_content,
+            text=openai_results_jsonl(
+                [
+                    openai_tool_call_output_line(
+                        "0",
+                        tool_name="get_weather",
+                        tool_id="call_123",
+                        arguments='{"location": "NYC"}',
+                    ),
+                ]
+            ),
         )
 
         results = await adapter.get_results(sample_batch_job)
@@ -442,6 +400,7 @@ class TestGetResults:
                         }
                     ],
                 ),
+                usage={"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
             ),
         ]
 
@@ -456,16 +415,15 @@ class TestListBatches:
             url=BATCHES_URL,
             json={
                 "data": [
-                    {
-                        "id": "batch_abc123",
-                        "created_at": 1705320000,
-                        "input_file_id": "file-xyz789",
-                    },
-                    {
-                        "id": "batch_def456",
-                        "created_at": 1705320100,
-                        "input_file_id": "file-uvw012",
-                    },
+                    openai_batch_response(
+                        batch_id="batch_abc123",
+                        input_file_id="file-xyz789",
+                    ),
+                    openai_batch_response(
+                        batch_id="batch_def456",
+                        input_file_id="file-uvw012",
+                        created_at=1705320100,
+                    ),
                 ],
             },
         )
@@ -473,13 +431,13 @@ class TestListBatches:
         results = await adapter.list_batches(limit=10)
 
         assert results == [
-            BatchApiJob(
+            ProviderJob(
                 id="batch_abc123",
                 provider=Provider.OPENAI,
                 created_at=datetime.fromtimestamp(1705320000),
                 metadata={"input_file_id": "file-xyz789"},
             ),
-            BatchApiJob(
+            ProviderJob(
                 id="batch_def456",
                 provider=Provider.OPENAI,
                 created_at=datetime.fromtimestamp(1705320100),
@@ -501,27 +459,32 @@ class TestCancel:
         httpx_mock.add_response(
             method="POST",
             url="https://api.openai.com/v1/batches/batch_abc123/cancel",
-            json={"id": "batch_abc123", "status": "cancelling"},
+            json=openai_batch_response(
+                batch_id="batch_abc123",
+                status="cancelling",
+            ),
         )
 
         # Mock get_status calls - first cancelling, then cancelled
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "cancelling",
-                "request_counts": {"total": 100, "completed": 50, "failed": 0},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status="cancelling",
+                total=100,
+                completed=50,
+            ),
         )
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "cancelled",
-                "request_counts": {"total": 100, "completed": 50, "failed": 0},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status="cancelled",
+                total=100,
+                completed=50,
+            ),
         )
 
         result = await adapter.cancel(sample_batch_job)
@@ -547,11 +510,12 @@ class TestCancel:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "cancelling",
-                "request_counts": {"total": 100, "completed": 50, "failed": 0},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status="cancelling",
+                total=100,
+                completed=50,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -563,11 +527,12 @@ class TestCancel:
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "status": "cancelled",
-                "request_counts": {"total": 100, "completed": 50, "failed": 0},
-            },
+            json=openai_batch_status_response(
+                batch_id="batch_abc123",
+                status="cancelled",
+                total=100,
+                completed=50,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -581,23 +546,25 @@ class TestAdapterInit:
 
     def test_init_with_api_key(self):
         """Test initialization with explicit API key."""
-        adapter = OpenAIBatchApiAdapter(api_key="sk-test123")
+        adapter = OpenAIProviderJobAdapter(api_key="sk-test123")
         assert adapter.api_key == "sk-test123"
         assert adapter.base_url == "https://api.openai.com/v1"
 
     def test_init_with_custom_base_url(self):
         """Test initialization with custom base URL."""
-        adapter = OpenAIBatchApiAdapter(api_key="sk-test123", base_url="https://custom.api.com/v1/")
+        adapter = OpenAIProviderJobAdapter(
+            api_key="sk-test123", base_url="https://custom.api.com/v1/"
+        )
         assert adapter.base_url == "https://custom.api.com/v1"  # Trailing slash removed
 
     def test_init_without_api_key_raises(self, monkeypatch):
         """Test initialization without API key raises error."""
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with pytest.raises(ValueError, match="OpenAI API key required"):
-            OpenAIBatchApiAdapter()
+            OpenAIProviderJobAdapter()
 
     def test_init_from_env(self, monkeypatch):
         """Test initialization from environment variable."""
         monkeypatch.setenv("OPENAI_API_KEY", "sk-from-env")
-        adapter = OpenAIBatchApiAdapter()
+        adapter = OpenAIProviderJobAdapter()
         assert adapter.api_key == "sk-from-env"

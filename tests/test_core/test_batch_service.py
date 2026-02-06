@@ -15,27 +15,27 @@ from langasync.exceptions import (
 )
 from langasync.core.batch_job_repository import BatchJob, FileSystemBatchJobRepository
 from langasync.providers.interface import (
-    BatchApiAdapterInterface,
-    BatchApiJob,
+    ProviderJobAdapterInterface,
+    ProviderJob,
     BatchStatus,
     BatchStatusInfo,
     BatchResponse,
 )
-from langasync.providers.none import NoModelBatchApiAdapter
+from langasync.providers.none import NoModelProviderJobAdapter
 
 
-class MockInProgressApiAdapter(BatchApiAdapterInterface):
+class MockInProgressApiAdapter(ProviderJobAdapterInterface):
     """Mock adapter that always returns IN_PROGRESS status."""
 
     def __init__(self, total: int = 10, completed: int = 5):
         self.total = total
         self.completed = completed
-        self.cancel_called_with: BatchApiJob | None = None
+        self.cancel_called_with: ProviderJob | None = None
 
-    async def create_batch(self, inputs, language_model) -> BatchApiJob:
+    async def create_batch(self, inputs, language_model) -> ProviderJob:
         raise NotImplementedError("Not needed for these tests")
 
-    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         return BatchStatusInfo(
             status=BatchStatus.IN_PROGRESS,
             total=self.total,
@@ -43,13 +43,13 @@ class MockInProgressApiAdapter(BatchApiAdapterInterface):
             failed=0,
         )
 
-    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
+    async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         return []
 
-    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         return []
 
-    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         self.cancel_called_with = batch_api_job
         return BatchStatusInfo(
             status=BatchStatus.CANCELLED,
@@ -59,7 +59,7 @@ class MockInProgressApiAdapter(BatchApiAdapterInterface):
         )
 
 
-class MockFailedApiAdapter(BatchApiAdapterInterface):
+class MockFailedApiAdapter(ProviderJobAdapterInterface):
     """Mock adapter that returns FAILED status."""
 
     def __init__(self, status: BatchStatus = BatchStatus.FAILED, total: int = 10, failed: int = 10):
@@ -67,10 +67,10 @@ class MockFailedApiAdapter(BatchApiAdapterInterface):
         self.total = total
         self.failed = failed
 
-    async def create_batch(self, inputs, language_model) -> BatchApiJob:
+    async def create_batch(self, inputs, language_model) -> ProviderJob:
         raise NotImplementedError("Not needed for these tests")
 
-    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         return BatchStatusInfo(
             status=self._status,
             total=self.total,
@@ -78,13 +78,13 @@ class MockFailedApiAdapter(BatchApiAdapterInterface):
             failed=self.failed,
         )
 
-    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
+    async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         return []
 
-    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         return []
 
-    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         return BatchStatusInfo(
             status=BatchStatus.CANCELLED,
             total=self.total,
@@ -93,16 +93,16 @@ class MockFailedApiAdapter(BatchApiAdapterInterface):
         )
 
 
-class MockAdapterWithFailedResponse(BatchApiAdapterInterface):
+class MockAdapterWithFailedResponse(ProviderJobAdapterInterface):
     """Mock adapter that returns a mix of successful and failed responses."""
 
     def __init__(self, failed_indices: list[int] = None):
         self.failed_indices = failed_indices if failed_indices is not None else [1]
 
-    async def create_batch(self, inputs, language_model) -> BatchApiJob:
+    async def create_batch(self, inputs, language_model) -> ProviderJob:
         raise NotImplementedError()
 
-    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         return BatchStatusInfo(
             status=BatchStatus.COMPLETED,
             total=3,
@@ -110,10 +110,10 @@ class MockAdapterWithFailedResponse(BatchApiAdapterInterface):
             failed=0,
         )
 
-    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
+    async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         return []
 
-    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         return [
             BatchResponse(
                 custom_id=str(i),
@@ -124,7 +124,7 @@ class MockAdapterWithFailedResponse(BatchApiAdapterInterface):
             for i in range(3)
         ]
 
-    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         return BatchStatusInfo(
             status=BatchStatus.CANCELLED,
             total=3,
@@ -226,7 +226,7 @@ class TestBatchJobServiceCreate:
             repository=repository,
         )
 
-        # NoModelBatchApiAdapter stores the preprocessed inputs
+        # NoModelProviderJobAdapter stores the preprocessed inputs
         # We can verify by getting results
         result = await service.get_results()
         assert result.results is not None
@@ -326,7 +326,7 @@ class TestBatchJobServiceGet:
         service = await BatchJobService.get("adapter-test-job", repository)
 
         assert service is not None
-        assert isinstance(service.batch_api_adapter, NoModelBatchApiAdapter)
+        assert isinstance(service.batch_api_adapter, NoModelProviderJobAdapter)
 
 
 class TestBatchJobServiceList:
@@ -446,7 +446,7 @@ class TestBatchJobServiceGetResults:
         assert isinstance(result, ProcessedResults)
         assert result.job_id == service.job_id
         assert result.results is not None
-        # NoModelBatchApiAdapter passes through inputs as strings
+        # NoModelProviderJobAdapter passes through inputs as strings
         # postprocessing_chain converts to uppercase
         assert "HELLO" in result.results
         assert "WORLD" in result.results
@@ -539,7 +539,7 @@ class TestBatchJobServiceGetResults:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="in-progress-job",
             provider="none",
             created_at=datetime.now(),
@@ -623,7 +623,7 @@ class TestBatchJobServiceCancel:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="cancel-test-job",
             provider="none",
             created_at=datetime.now(),
@@ -659,7 +659,7 @@ class TestBatchJobServiceFailure:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="failed-job",
             provider="none",
             created_at=datetime.now(),
@@ -692,7 +692,7 @@ class TestBatchJobServiceFailure:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="failed-job-2",
             provider="none",
             created_at=datetime.now(),
@@ -726,7 +726,7 @@ class TestBatchJobServiceFailure:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="failed-job-3",
             provider="none",
             created_at=datetime.now(),
@@ -760,7 +760,7 @@ class TestBatchJobServiceFailure:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="expired-job",
             provider="none",
             created_at=datetime.now(),
@@ -798,7 +798,7 @@ class TestBatchJobServiceFailure:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="cancel-status-job",
             provider="none",
             created_at=datetime.now(),
@@ -837,7 +837,7 @@ class TestPostprocessingErrors:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="failed-response-job",
             provider="none",
             created_at=datetime.now(),
@@ -878,7 +878,7 @@ class TestPostprocessingErrors:
         )
         await repository.save(job)
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id="failing-postprocess-job",
             provider="none",
             created_at=datetime.now(),

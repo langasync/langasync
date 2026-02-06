@@ -16,8 +16,8 @@ from langasync.exceptions import (
 )
 
 from langasync.providers.interface import (
-    BatchApiAdapterInterface,
-    BatchApiJob,
+    ProviderJobAdapterInterface,
+    ProviderJob,
     BatchStatusInfo,
     FINISHED_STATUSES,
     BatchStatus,
@@ -27,7 +27,7 @@ from langasync.core.batch_job_repository import BatchJob, BatchJobRepository
 from langasync.providers import ADAPTER_REGISTRY, Provider
 
 
-def _get_adapter_from_provider(provider: Provider) -> BatchApiAdapterInterface:
+def _get_adapter_from_provider(provider: Provider) -> ProviderJobAdapterInterface:
     """Get the appropriate batch API adapter for a provider name."""
     adapter_cls = ADAPTER_REGISTRY.get(provider)
     if adapter_cls is None:
@@ -51,7 +51,7 @@ def _get_provider_from_model(model: BaseLanguageModel | None) -> Provider:
     raise UnsupportedProviderError(f"Cannot detect provider for model: {lc_id}")
 
 
-def _get_adapter_from_model(model: BaseLanguageModel | None) -> BatchApiAdapterInterface:
+def _get_adapter_from_model(model: BaseLanguageModel | None) -> ProviderJobAdapterInterface:
     """Get the appropriate batch API adapter for a model."""
     provider = _get_provider_from_model(model)
     return _get_adapter_from_provider(provider)
@@ -71,8 +71,8 @@ class ProcessedResults:
 class BatchJobService:
     def __init__(
         self,
-        batch_api_job: BatchApiJob,
-        batch_api_adapter: BatchApiAdapterInterface,
+        batch_api_job: ProviderJob,
+        batch_api_adapter: ProviderJobAdapterInterface,
         postprocessing_chain: Runnable,
         repository: BatchJobRepository,
     ):
@@ -140,7 +140,7 @@ class BatchJobService:
         if batch_job is None:
             return None
 
-        batch_api_job = BatchApiJob(
+        batch_api_job = ProviderJob(
             id=batch_job.id,
             provider=batch_job.provider,
             created_at=batch_job.created_at,
@@ -168,7 +168,7 @@ class BatchJobService:
         batch_jobs = await repository.list(pending=pending)
         services = []
         for batch_job in batch_jobs:
-            batch_api_job = BatchApiJob(
+            batch_api_job = ProviderJob(
                 id=batch_job.id,
                 provider=batch_job.provider,
                 created_at=batch_job.created_at,

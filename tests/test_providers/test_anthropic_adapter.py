@@ -1,4 +1,4 @@
-"""Unit tests for AnthropicBatchApiAdapter with mocked httpx calls."""
+"""Unit tests for AnthropicProviderJobAdapter with mocked httpx calls."""
 
 import json
 import re
@@ -9,13 +9,21 @@ from pytest_httpx import HTTPXMock
 
 from langchain_core.messages import AIMessage
 
-from langasync.providers.anthropic import AnthropicBatchApiAdapter
+from langasync.providers.anthropic import AnthropicProviderJobAdapter
 from langasync.providers.interface import (
-    BatchApiJob,
+    ProviderJob,
     BatchResponse,
     BatchStatus,
     BatchStatusInfo,
     Provider,
+)
+from tests.fixtures.anthropic_responses import (
+    anthropic_batch_response,
+    anthropic_batch_status_response,
+    anthropic_result_line,
+    anthropic_error_result_line,
+    anthropic_tool_use_result_line,
+    anthropic_results_jsonl,
 )
 
 
@@ -27,7 +35,7 @@ BATCH_ID_URL = re.compile(r"https://api\.anthropic\.com/v1/messages/batches/batc
 @pytest.fixture
 def adapter():
     """Create Anthropic adapter with test API key."""
-    return AnthropicBatchApiAdapter(api_key="test-api-key")
+    return AnthropicProviderJobAdapter(api_key="test-api-key")
 
 
 @pytest.fixture
@@ -40,8 +48,8 @@ def mock_model():
 
 @pytest.fixture
 def sample_batch_job():
-    """Create a sample BatchApiJob for testing."""
-    return BatchApiJob(
+    """Create a sample ProviderJob for testing."""
+    return ProviderJob(
         id="batch_abc123",
         provider=Provider.ANTHROPIC,
         created_at=datetime(2024, 1, 15, 12, 0, 0),
@@ -56,25 +64,17 @@ class TestCreateBatch:
         httpx_mock.add_response(
             method="POST",
             url=BATCHES_URL,
-            json={
-                "id": "batch_abc123",
-                "type": "message_batch",
-                "processing_status": "in_progress",
-                "created_at": "2024-01-15T12:00:00Z",
-                "request_counts": {
-                    "processing": 2,
-                    "succeeded": 0,
-                    "errored": 0,
-                    "canceled": 0,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="in_progress",
+                processing=2,
+            ),
         )
 
         inputs = ["Hello, world!", "How are you?"]
         result = await adapter.create_batch(inputs, mock_model)
 
-        assert result == BatchApiJob(
+        assert result == ProviderJob(
             id="batch_abc123",
             provider=Provider.ANTHROPIC,
             created_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
@@ -112,10 +112,7 @@ class TestCreateBatch:
         httpx_mock.add_response(
             method="POST",
             url=BATCHES_URL,
-            json={
-                "id": "batch_abc123",
-                "created_at": "2024-01-15T12:00:00Z",
-            },
+            json=anthropic_batch_response(batch_id="batch_abc123"),
         )
 
         bindings = {
@@ -124,7 +121,7 @@ class TestCreateBatch:
         }
         result = await adapter.create_batch(["Test"], mock_model, model_bindings=bindings)
 
-        assert result == BatchApiJob(
+        assert result == ProviderJob(
             id="batch_abc123",
             provider=Provider.ANTHROPIC,
             created_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
@@ -155,17 +152,12 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "in_progress",
-                "request_counts": {
-                    "processing": 50,
-                    "succeeded": 50,
-                    "errored": 0,
-                    "canceled": 0,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="in_progress",
+                processing=50,
+                succeeded=50,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -179,17 +171,11 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "ended",
-                "request_counts": {
-                    "processing": 0,
-                    "succeeded": 100,
-                    "errored": 0,
-                    "canceled": 0,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="ended",
+                succeeded=100,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -203,17 +189,11 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "ended",
-                "request_counts": {
-                    "processing": 0,
-                    "succeeded": 0,
-                    "errored": 100,
-                    "canceled": 0,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="ended",
+                errored=100,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -270,11 +250,11 @@ class TestGetStatus:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": processing_status,
-                "request_counts": request_counts,
-            },
+            json=anthropic_batch_response(
+                batch_id="batch_abc123",
+                processing_status=processing_status,
+                request_counts=request_counts,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -290,46 +270,25 @@ class TestGetResults:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "ended",
-                "results_url": "https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
-            },
+            json=anthropic_batch_response(
+                batch_id="batch_abc123",
+                processing_status="ended",
+                results_url="https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
+            ),
         )
 
         # Mock results download
-        results_content = "\n".join(
-            [
-                json.dumps(
-                    {
-                        "custom_id": "0",
-                        "result": {
-                            "type": "succeeded",
-                            "message": {
-                                "content": [{"type": "text", "text": "Hello!"}],
-                                "usage": {"input_tokens": 10, "output_tokens": 5},
-                            },
-                        },
-                    }
-                ),
-                json.dumps(
-                    {
-                        "custom_id": "1",
-                        "result": {
-                            "type": "succeeded",
-                            "message": {
-                                "content": [{"type": "text", "text": "I'm fine!"}],
-                                "usage": {"input_tokens": 12, "output_tokens": 8},
-                            },
-                        },
-                    }
-                ),
-            ]
-        )
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
-            text=results_content,
+            text=anthropic_results_jsonl(
+                [
+                    anthropic_result_line("0", content="Hello!"),
+                    anthropic_result_line(
+                        "1", content="I'm fine!", input_tokens=12, output_tokens=8
+                    ),
+                ]
+            ),
         )
 
         results = await adapter.get_results(sample_batch_job)
@@ -354,41 +313,26 @@ class TestGetResults:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "ended",
-                "results_url": "https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
-            },
+            json=anthropic_batch_response(
+                batch_id="batch_abc123",
+                processing_status="ended",
+                results_url="https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
+            ),
         )
 
-        results_content = "\n".join(
-            [
-                json.dumps(
-                    {
-                        "custom_id": "0",
-                        "result": {
-                            "type": "succeeded",
-                            "message": {
-                                "content": [{"type": "text", "text": "Success!"}],
-                            },
-                        },
-                    }
-                ),
-                json.dumps(
-                    {
-                        "custom_id": "1",
-                        "result": {
-                            "type": "errored",
-                            "error": {"type": "rate_limit_error", "message": "Rate limit exceeded"},
-                        },
-                    }
-                ),
-            ]
-        )
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
-            text=results_content,
+            text=anthropic_results_jsonl(
+                [
+                    anthropic_result_line("0", content="Success!"),
+                    anthropic_error_result_line(
+                        "1",
+                        error_type="errored",
+                        error_message="Rate limit exceeded",
+                    ),
+                ]
+            ),
         )
 
         results = await adapter.get_results(sample_batch_job)
@@ -398,11 +342,12 @@ class TestGetResults:
                 custom_id="0",
                 success=True,
                 content=AIMessage(content="Success!"),
+                usage={"input_tokens": 10, "output_tokens": 5},
             ),
             BatchResponse(
                 custom_id="1",
                 success=False,
-                error={"type": "rate_limit_error", "message": "Rate limit exceeded"},
+                error={"type": "api_error", "message": "Rate limit exceeded"},
             ),
         ]
 
@@ -413,35 +358,26 @@ class TestGetResults:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "ended",
-                "results_url": "https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
-            },
+            json=anthropic_batch_response(
+                batch_id="batch_abc123",
+                processing_status="ended",
+                results_url="https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
+            ),
         )
 
-        results_content = json.dumps(
-            {
-                "custom_id": "0",
-                "result": {
-                    "type": "succeeded",
-                    "message": {
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "id": "call_123",
-                                "name": "get_weather",
-                                "input": {"location": "NYC"},
-                            }
-                        ],
-                    },
-                },
-            }
-        )
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123/results",
-            text=results_content,
+            text=anthropic_results_jsonl(
+                [
+                    anthropic_tool_use_result_line(
+                        "0",
+                        tool_name="get_weather",
+                        tool_id="call_123",
+                        tool_input={"location": "NYC"},
+                    ),
+                ]
+            ),
         )
 
         results = await adapter.get_results(sample_batch_job)
@@ -452,12 +388,13 @@ class TestGetResults:
                 success=True,
                 content=AIMessage(
                     content=[
+                        {"type": "text", "text": "I'll check the weather."},
                         {
                             "type": "tool_use",
                             "id": "call_123",
                             "name": "get_weather",
                             "input": {"location": "NYC"},
-                        }
+                        },
                     ],
                     tool_calls=[
                         {
@@ -468,6 +405,7 @@ class TestGetResults:
                         }
                     ],
                 ),
+                usage={"input_tokens": 10, "output_tokens": 20},
             ),
         ]
 
@@ -478,10 +416,10 @@ class TestGetResults:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "in_progress",
-            },
+            json=anthropic_batch_response(
+                batch_id="batch_abc123",
+                processing_status="in_progress",
+            ),
         )
 
         results = await adapter.get_results(sample_batch_job)
@@ -499,14 +437,11 @@ class TestListBatches:
             url=BATCHES_URL,
             json={
                 "data": [
-                    {
-                        "id": "batch_abc123",
-                        "created_at": "2024-01-15T12:00:00Z",
-                    },
-                    {
-                        "id": "batch_def456",
-                        "created_at": "2024-01-15T12:01:40Z",
-                    },
+                    anthropic_batch_response(batch_id="batch_abc123"),
+                    anthropic_batch_response(
+                        batch_id="batch_def456",
+                        created_at="2024-01-15T12:01:40Z",
+                    ),
                 ],
             },
         )
@@ -514,12 +449,12 @@ class TestListBatches:
         results = await adapter.list_batches(limit=10)
 
         assert results == [
-            BatchApiJob(
+            ProviderJob(
                 id="batch_abc123",
                 provider=Provider.ANTHROPIC,
                 created_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
             ),
-            BatchApiJob(
+            ProviderJob(
                 id="batch_def456",
                 provider=Provider.ANTHROPIC,
                 created_at=datetime(2024, 1, 15, 12, 1, 40, tzinfo=timezone.utc),
@@ -540,7 +475,10 @@ class TestCancel:
         httpx_mock.add_response(
             method="POST",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123/cancel",
-            json={"id": "batch_abc123", "processing_status": "canceling"},
+            json=anthropic_batch_response(
+                batch_id="batch_abc123",
+                processing_status="canceling",
+            ),
         )
 
         # Mock get_status calls - first canceling, then ended
@@ -548,32 +486,22 @@ class TestCancel:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "canceling",
-                "request_counts": {
-                    "processing": 50,
-                    "succeeded": 50,
-                    "errored": 0,
-                    "canceled": 0,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="canceling",
+                processing=50,
+                succeeded=50,
+            ),
         )
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "ended",
-                "request_counts": {
-                    "processing": 0,
-                    "succeeded": 50,
-                    "errored": 0,
-                    "canceled": 50,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="ended",
+                succeeded=50,
+                canceled=50,
+            ),
         )
 
         result = await adapter.cancel(sample_batch_job)
@@ -600,17 +528,11 @@ class TestCancel:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "canceling",
-                "request_counts": {
-                    "processing": 100,
-                    "succeeded": 0,
-                    "errored": 0,
-                    "canceled": 0,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="canceling",
+                processing=100,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -623,17 +545,11 @@ class TestCancel:
         httpx_mock.add_response(
             method="GET",
             url="https://api.anthropic.com/v1/messages/batches/batch_abc123",
-            json={
-                "id": "batch_abc123",
-                "processing_status": "ended",
-                "request_counts": {
-                    "processing": 0,
-                    "succeeded": 0,
-                    "errored": 0,
-                    "canceled": 100,
-                    "expired": 0,
-                },
-            },
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="ended",
+                canceled=100,
+            ),
         )
 
         result = await adapter.get_status(sample_batch_job)
@@ -647,23 +563,25 @@ class TestAdapterInit:
 
     def test_init_with_api_key(self):
         """Test initialization with explicit API key."""
-        adapter = AnthropicBatchApiAdapter(api_key="sk-test123")
+        adapter = AnthropicProviderJobAdapter(api_key="sk-test123")
         assert adapter.api_key == "sk-test123"
         assert adapter.base_url == "https://api.anthropic.com"
 
     def test_init_with_custom_base_url(self):
         """Test initialization with custom base URL."""
-        adapter = AnthropicBatchApiAdapter(api_key="sk-test123", base_url="https://custom.api.com/")
+        adapter = AnthropicProviderJobAdapter(
+            api_key="sk-test123", base_url="https://custom.api.com/"
+        )
         assert adapter.base_url == "https://custom.api.com"  # Trailing slash removed
 
     def test_init_without_api_key_raises(self, monkeypatch):
         """Test initialization without API key raises error."""
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         with pytest.raises(ValueError, match="Anthropic API key required"):
-            AnthropicBatchApiAdapter()
+            AnthropicProviderJobAdapter()
 
     def test_init_from_env(self, monkeypatch):
         """Test initialization from environment variable."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-from-env")
-        adapter = AnthropicBatchApiAdapter()
+        adapter = AnthropicProviderJobAdapter()
         assert adapter.api_key == "sk-from-env"

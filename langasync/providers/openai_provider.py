@@ -1,6 +1,5 @@
 """OpenAI Batch API adapter."""
 
-import asyncio
 import json
 import os
 import tempfile
@@ -12,9 +11,7 @@ from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.messages.utils import convert_to_openai_messages
 
-from langasync.exceptions import ApiTimeoutError, provider_error_handling
 from langasync.providers.interface import (
-    FINISHED_STATUSES,
     ProviderJobAdapterInterface,
     ProviderJob,
     BatchResponse,
@@ -70,18 +67,12 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
             timeout=60.0,
         )
 
-    def _get_model_config(
-        self, language_model: LanguageModelType, model_bindings: dict | None = None
-    ) -> dict[str, Any]:
+    def _get_model_config(self, language_model: LanguageModelType) -> dict[str, Any]:
         """Extract model config from LangChain model for batch request body."""
+        # Get model name
         model = getattr(language_model, "model_name", None) or getattr(
-            language_model, "model", None
+            language_model, "model", "gpt-4o-mini"
         )
-        if not model:
-            raise ValueError(
-                "Could not determine model name from language model. "
-                "Ensure your model has a 'model' or 'model_name' attribute."
-            )
 
         config: dict[str, Any] = {"model": model}
 
@@ -101,10 +92,6 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
 
         # Merge any extra model_kwargs
         config.update(getattr(language_model, "model_kwargs", {}))
-
-        # Merge bindings from .bind() calls (tools, tool_choice, etc.)
-        if model_bindings:
-            config.update(model_bindings)
 
         return config
 
@@ -132,15 +119,13 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         response.raise_for_status()
         return response.text
 
-    @provider_error_handling
     async def create_batch(
         self,
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
-        model_bindings: dict | None = None,
     ) -> ProviderJob:
         """Create a new batch job with OpenAI."""
-        model_config = self._get_model_config(language_model, model_bindings)
+        model_config = self._get_model_config(language_model)
 
         # Build JSONL content
         lines = []
@@ -179,7 +164,6 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
             metadata={"input_file_id": file_id},
         )
 
-    @provider_error_handling
     async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         """Get the current status of a batch job."""
         response = await self._client.get(f"{self.base_url}/batches/{batch_api_job.id}")
@@ -195,7 +179,6 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
             failed=request_counts.get("failed", 0),
         )
 
-    @provider_error_handling
     async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         """List recent batch jobs."""
         response = await self._client.get(
@@ -248,7 +231,6 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
             usage=body.get("usage"),
         )
 
-    @provider_error_handling
     async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         """Get results from a completed batch job."""
         response = await self._client.get(f"{self.base_url}/batches/{batch_api_job.id}")
@@ -280,21 +262,11 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         results.sort(key=lambda r: int(r.custom_id) if r.custom_id.isdigit() else 0)
         return results
 
-    @provider_error_handling
-    async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
-        """Cancel a batch job and wait until cancellation completes."""
-        await self._client.post(f"{self.base_url}/batches/{batch_api_job.id}/cancel")
-
-        # Poll until batch reaches a terminal state
-        cancel_timeout_seconds = 60
-        for _ in range(cancel_timeout_seconds):
-            status_info = await self.get_status(batch_api_job)
-            if status_info.status in FINISHED_STATUSES:
-                return BatchStatusInfo(
-                    status=BatchStatus.CANCELLED,
-                    total=status_info.total,
-                    completed=status_info.completed,
-                    failed=status_info.failed,
-                )
-            await asyncio.sleep(1)
-        raise ApiTimeoutError(f"Cancel timed out after {cancel_timeout_seconds} seconds")
+    async def cancel(self, batch_api_job: ProviderJob) -> bool:
+        """Cancel a batch job."""
+        try:
+            response = await self._client.post(f"{self.base_url}/batches/{batch_api_job.id}/cancel")
+            response.raise_for_status()
+            return True
+        except httpx.HTTPStatusError:
+            return False

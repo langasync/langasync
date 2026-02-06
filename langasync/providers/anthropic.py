@@ -16,8 +16,8 @@ from langchain_core.prompt_values import PromptValue
 from langasync.exceptions import ApiTimeoutError, provider_error_handling
 from langasync.providers.interface import (
     FINISHED_STATUSES,
-    BatchApiAdapterInterface,
-    BatchApiJob,
+    ProviderJobAdapterInterface,
+    ProviderJob,
     BatchResponse,
     BatchStatus,
     BatchStatusInfo,
@@ -82,7 +82,7 @@ def _map_anthropic_status(processing_status: str, request_counts: dict) -> Batch
     return BatchStatus.PENDING
 
 
-class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
+class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
     """Anthropic Message Batches API adapter.
 
     Args:
@@ -145,7 +145,7 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
         model_bindings: dict | None = None,
-    ) -> BatchApiJob:
+    ) -> ProviderJob:
         """Create a new batch job with Anthropic."""
         model_config = self._get_model_config(language_model, model_bindings)
 
@@ -160,14 +160,14 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
         response.raise_for_status()
         batch_data = response.json()
 
-        return BatchApiJob(
+        return ProviderJob(
             id=batch_data["id"],
             provider=Provider.ANTHROPIC,
             created_at=datetime.fromisoformat(batch_data["created_at"].replace("Z", "+00:00")),
         )
 
     @provider_error_handling
-    async def get_status(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         """Get the current status of a batch job."""
         response = await self._client.get(f"{self.base_url}/v1/messages/batches/{batch_api_job.id}")
         response.raise_for_status()
@@ -192,7 +192,7 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
         )
 
     @provider_error_handling
-    async def list_batches(self, limit: int = 20) -> list[BatchApiJob]:
+    async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         """List recent batch jobs."""
         response = await self._client.get(
             f"{self.base_url}/v1/messages/batches",
@@ -202,7 +202,7 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
         data = response.json()
 
         return [
-            BatchApiJob(
+            ProviderJob(
                 id=batch["id"],
                 provider=Provider.ANTHROPIC,
                 created_at=datetime.fromisoformat(batch["created_at"].replace("Z", "+00:00")),
@@ -253,7 +253,7 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
             )
 
     @provider_error_handling
-    async def get_results(self, batch_api_job: BatchApiJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
         """Get results from a completed batch job."""
         # First get batch info to get results_url
         response = await self._client.get(f"{self.base_url}/v1/messages/batches/{batch_api_job.id}")
@@ -278,7 +278,7 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
         return results
 
     @provider_error_handling
-    async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
+    async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         """Cancel a batch job and wait until cancellation completes."""
         await self._client.post(f"{self.base_url}/v1/messages/batches/{batch_api_job.id}/cancel")
 

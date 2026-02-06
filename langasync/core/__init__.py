@@ -6,8 +6,8 @@ from ..exceptions import (
     UnsupportedProviderError,
 )
 from ..providers.interface import (
-    BatchApiAdapterInterface,
-    BatchApiJob,
+    ProviderJobAdapterInterface,
+    ProviderJob,
     BatchResponse,
     BatchStatus,
     BatchStatusInfo,
@@ -24,8 +24,8 @@ __all__ = [
     "LangAsyncError",
     "UnsupportedChainError",
     "UnsupportedProviderError",
-    "BatchApiAdapterInterface",
-    "BatchApiJob",
+    "ProviderJobAdapterInterface",
+    "ProviderJob",
     "BatchJob",
     "BatchJobRepository",
     "FileSystemBatchJobRepository",
