@@ -6,6 +6,8 @@ from tests.fixtures.anthropic_responses import (
     anthropic_result_line,
     anthropic_error_result_line,
     anthropic_tool_use_result_line,
+    anthropic_results_jsonl,
+    anthropic_list_batches_response,
 )
 from tests.fixtures.openai_responses import (
     openai_batch_response,
@@ -13,7 +15,10 @@ from tests.fixtures.openai_responses import (
     openai_file_upload_response,
     openai_output_line,
     openai_error_output_line,
+    openai_error_file_line,
     openai_tool_call_output_line,
+    openai_results_jsonl,
+    openai_list_batches_response,
 )
 
 __all__ = [
@@ -23,11 +28,16 @@ __all__ = [
     "anthropic_result_line",
     "anthropic_error_result_line",
     "anthropic_tool_use_result_line",
+    "anthropic_results_jsonl",
+    "anthropic_list_batches_response",
     # OpenAI
     "openai_batch_response",
     "openai_batch_status_response",
     "openai_file_upload_response",
     "openai_output_line",
     "openai_error_output_line",
+    "openai_error_file_line",
     "openai_tool_call_output_line",
+    "openai_results_jsonl",
+    "openai_list_batches_response",
 ]

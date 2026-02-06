@@ -24,6 +24,7 @@ from tests.fixtures.anthropic_responses import (
     anthropic_error_result_line,
     anthropic_tool_use_result_line,
     anthropic_results_jsonl,
+    anthropic_list_batches_response,
 )
 
 
@@ -435,15 +436,15 @@ class TestListBatches:
         httpx_mock.add_response(
             method="GET",
             url=BATCHES_URL,
-            json={
-                "data": [
+            json=anthropic_list_batches_response(
+                [
                     anthropic_batch_response(batch_id="batch_abc123"),
                     anthropic_batch_response(
                         batch_id="batch_def456",
                         created_at="2024-01-15T12:01:40Z",
                     ),
-                ],
-            },
+                ]
+            ),
         )
 
         results = await adapter.list_batches(limit=10)

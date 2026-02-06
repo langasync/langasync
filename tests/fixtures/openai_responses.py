@@ -138,9 +138,9 @@ def openai_error_output_line(
     error_type: str = "rate_limit_error",
     status_code: int = 429,
 ) -> dict[str, Any]:
-    """Factory for an error output line in OpenAI JSONL results.
+    """Factory for an error in the output file (non-200 response).
 
-    Used by: Output/Error JSONL from output_file_id or error_file_id
+    Used by: Output JSONL from output_file_id
     """
     return {
         "custom_id": custom_id,
@@ -152,6 +152,24 @@ def openai_error_output_line(
                     "type": error_type,
                 }
             },
+        },
+    }
+
+
+def openai_error_file_line(
+    custom_id: str,
+    error_message: str = "Rate limit exceeded",
+    error_code: str = "rate_limit_exceeded",
+) -> dict[str, Any]:
+    """Factory for an error line in the error file.
+
+    Used by: Error JSONL from error_file_id
+    """
+    return {
+        "custom_id": custom_id,
+        "error": {
+            "message": error_message,
+            "code": error_code,
         },
     }
 
@@ -208,3 +226,25 @@ def openai_tool_call_output_line(
 def openai_results_jsonl(results: list[dict[str, Any]]) -> str:
     """Convert list of result dicts to JSONL string."""
     return "\n".join(json.dumps(r) for r in results)
+
+
+def openai_list_batches_response(
+    batches: list[dict[str, Any]],
+    has_more: bool = False,
+    first_id: str | None = None,
+    last_id: str | None = None,
+) -> dict[str, Any]:
+    """Factory for OpenAI list batches response.
+
+    Used by: GET /v1/batches
+    """
+    response: dict[str, Any] = {
+        "object": "list",
+        "data": batches,
+        "has_more": has_more,
+    }
+    if first_id is not None:
+        response["first_id"] = first_id
+    if last_id is not None:
+        response["last_id"] = last_id
+    return response

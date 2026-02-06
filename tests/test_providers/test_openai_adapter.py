@@ -23,8 +23,10 @@ from tests.fixtures.openai_responses import (
     openai_file_upload_response,
     openai_output_line,
     openai_error_output_line,
+    openai_error_file_line,
     openai_tool_call_output_line,
     openai_results_jsonl,
+    openai_list_batches_response,
 )
 
 
@@ -326,16 +328,10 @@ class TestGetResults:
         )
 
         # Error file with failed response
-        error_content = json.dumps(
-            {
-                "custom_id": "1",
-                "error": {"message": "Rate limit exceeded", "code": "rate_limit_exceeded"},
-            }
-        )
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/files/file-error123/content",
-            text=error_content,
+            text=json.dumps(openai_error_file_line("1")),
         )
 
         results = await adapter.get_results(sample_batch_job)
@@ -413,8 +409,8 @@ class TestListBatches:
         httpx_mock.add_response(
             method="GET",
             url=BATCHES_URL,
-            json={
-                "data": [
+            json=openai_list_batches_response(
+                [
                     openai_batch_response(
                         batch_id="batch_abc123",
                         input_file_id="file-xyz789",
@@ -424,8 +420,8 @@ class TestListBatches:
                         input_file_id="file-uvw012",
                         created_at=1705320100,
                     ),
-                ],
-            },
+                ]
+            ),
         )
 
         results = await adapter.list_batches(limit=10)

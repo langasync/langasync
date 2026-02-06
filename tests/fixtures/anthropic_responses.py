@@ -162,3 +162,24 @@ def anthropic_tool_use_result_line(
 def anthropic_results_jsonl(results: list[dict[str, Any]]) -> str:
     """Convert list of result dicts to JSONL string."""
     return "\n".join(json.dumps(r) for r in results)
+
+
+def anthropic_list_batches_response(
+    batches: list[dict[str, Any]],
+    has_more: bool = False,
+    first_id: str | None = None,
+    last_id: str | None = None,
+) -> dict[str, Any]:
+    """Factory for Anthropic list batches response.
+
+    Used by: GET /v1/messages/batches
+    """
+    response: dict[str, Any] = {
+        "data": batches,
+        "has_more": has_more,
+    }
+    if first_id is not None:
+        response["first_id"] = first_id
+    if last_id is not None:
+        response["last_id"] = last_id
+    return response
