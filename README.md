@@ -34,8 +34,7 @@ pip install -e ".[dev]"
 
 ```python
 from langchain_openai import ChatOpenAI
-from langasync.core import batch_chain, FileSystemBatchJobRepository
-from langasync.core.batch_api import BatchStatus
+from langasync.core import batch_chain, FileSystemBatchJobRepository, BatchStatus
 
 # Your existing chain
 model = ChatOpenAI()

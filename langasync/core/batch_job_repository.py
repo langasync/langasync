@@ -9,7 +9,7 @@ from typing import Any
 import cloudpickle
 from langchain_core.runnables import Runnable
 
-from langasync.core.batch_api import Provider, BatchStatus
+from langasync.providers.interface import Provider, BatchStatus
 
 
 @dataclass

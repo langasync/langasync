@@ -11,7 +11,7 @@ from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langasync.core.batch_poller import BatchPoller
 from langasync.core.batch_service import BatchJobService, ProcessedResults
 from langasync.core.batch_job_repository import BatchJob, FileSystemBatchJobRepository
-from langasync.core.batch_api import (
+from langasync.providers.interface import (
     BatchStatus,
     BatchStatusInfo,
     BatchApiJob,

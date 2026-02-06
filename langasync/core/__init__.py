@@ -1,11 +1,11 @@
 """Core abstractions and base classes for langasync."""
 
-from .exceptions import (
+from ..exceptions import (
     LangAsyncError,
     UnsupportedChainError,
     UnsupportedProviderError,
 )
-from .batch_api import (
+from ..providers.interface import (
     BatchApiAdapterInterface,
     BatchApiJob,
     BatchResponse,

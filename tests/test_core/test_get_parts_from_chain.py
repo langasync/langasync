@@ -17,7 +17,7 @@ from langasync.core.get_parts_from_chain import (
     _unwrap_to_model,
     _steps_to_runnable,
 )
-from langasync.core.exceptions import UnsupportedChainError
+from langasync.exceptions import UnsupportedChainError
 from .conftest import MockChatModel, MockLLM, AnotherMockChatModel, MockRetriever
 
 

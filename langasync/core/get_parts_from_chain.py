@@ -14,7 +14,7 @@ from langchain_core.runnables.base import RunnableBindingBase, RunnableEachBase
 from langchain_core.runnables.branch import RunnableBranch
 from langchain_core.runnables.passthrough import RunnableAssign
 
-from langasync.core.exceptions import UnsupportedChainError
+from langasync.exceptions import UnsupportedChainError
 
 
 @dataclass

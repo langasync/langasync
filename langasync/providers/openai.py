@@ -10,8 +10,9 @@ import httpx
 from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.messages.utils import convert_to_openai_messages
-from langasync.core.exceptions import provider_error_handling
-from langasync.core.batch_api import (
+
+from langasync.exceptions import provider_error_handling
+from langasync.providers.interface import (
     BatchApiAdapterInterface,
     BatchApiJob,
     BatchResponse,

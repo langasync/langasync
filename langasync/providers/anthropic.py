@@ -11,8 +11,9 @@ from langchain_anthropic.output_parsers import extract_tool_calls
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompt_values import PromptValue
-from langasync.core.exceptions import provider_error_handling
-from langasync.core.batch_api import (
+
+from langasync.exceptions import provider_error_handling
+from langasync.providers.interface import (
     BatchApiAdapterInterface,
     BatchApiJob,
     BatchResponse,
@@ -23,8 +24,7 @@ from langasync.core.batch_api import (
 )
 
 
-def _to_anthropic_request(inp: LanguageModelInput, model_config: dict, custom_id: str) -> dict:
-    """Convert LanguageModelInput to Anthropic batch request format."""
+def custom_convert_to_anthropic_messages(inp: LanguageModelInput):
     # Handle PromptValue (from prompt templates)
     if isinstance(inp, PromptValue):
         inp = inp.to_messages()
@@ -35,6 +35,12 @@ def _to_anthropic_request(inp: LanguageModelInput, model_config: dict, custom_id
 
     # Use LangChain's _format_messages to convert
     system, messages = _format_messages(inp)
+    return system, messages
+
+
+def _to_anthropic_request(inp: LanguageModelInput, model_config: dict, custom_id: str) -> dict:
+    """Convert LanguageModelInput to Anthropic batch request format."""
+    system, messages = custom_convert_to_anthropic_messages(inp)
 
     params = {**model_config, "messages": messages}
     if system:

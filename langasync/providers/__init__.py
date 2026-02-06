@@ -1,6 +1,6 @@
 """Provider implementations for various third-party APIs."""
 
-from langasync.core.batch_api import Provider
+from langasync.providers.interface import Provider
 from langasync.providers.none import NoModelBatchApiAdapter
 from langasync.providers.openai import OpenAIBatchApiAdapter
 from langasync.providers.anthropic import AnthropicBatchApiAdapter

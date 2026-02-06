@@ -6,7 +6,7 @@ from typing import Any
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.runnables import Runnable
 
-from langasync.core.exceptions import (
+from langasync.exceptions import (
     error_handling,
     LangAsyncError,
     UnsupportedProviderError,
@@ -15,7 +15,7 @@ from langasync.core.exceptions import (
     FailedPreProcessingError,
 )
 
-from langasync.core.batch_api import (
+from langasync.providers.interface import (
     BatchApiAdapterInterface,
     BatchApiJob,
     BatchStatusInfo,

@@ -8,8 +8,9 @@ from pathlib import Path
 
 import cloudpickle
 from langchain_core.language_models import LanguageModelInput
-from langasync.core.exceptions import provider_error_handling
-from langasync.core.batch_api import (
+
+from langasync.exceptions import provider_error_handling
+from langasync.providers.interface import (
     BatchApiAdapterInterface,
     BatchApiJob,
     BatchResponse,

@@ -8,9 +8,13 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 from langasync.core.batch_service import BatchJobService, ProcessedResults
-from langasync.core.exceptions import FailedLLMOutputError, FailedPostProcessingError, FailedPreProcessingError
+from langasync.exceptions import (
+    FailedLLMOutputError,
+    FailedPostProcessingError,
+    FailedPreProcessingError,
+)
 from langasync.core.batch_job_repository import BatchJob, FileSystemBatchJobRepository
-from langasync.core.batch_api import (
+from langasync.providers.interface import (
     BatchApiAdapterInterface,
     BatchApiJob,
     BatchStatus,
@@ -901,6 +905,7 @@ class TestPreprocessingErrors:
         self, repository: FileSystemBatchJobRepository, postprocessing_chain
     ):
         """When preprocessing chain raises, raises FailedPreProcessingError."""
+
         def failing_preprocessor(x):
             raise ValueError("Preprocessing failed")
 

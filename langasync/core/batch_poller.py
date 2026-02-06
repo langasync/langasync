@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import AsyncIterator
 
-from langasync.core.batch_api import FINISHED_STATUSES
+from langasync.providers.interface import FINISHED_STATUSES
 
 
 from langasync.core.batch_service import BatchJobService, ProcessedResults
