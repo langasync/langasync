@@ -101,8 +101,13 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
     ) -> dict[str, Any]:
         """Extract model config from LangChain model for batch request."""
         model = getattr(language_model, "model_name", None) or getattr(
-            language_model, "model", "claude-sonnet-4-5-20250929"
+            language_model, "model", None
         )
+        if not model:
+            raise ValueError(
+                "Could not determine model name from language model. "
+                "Ensure your model has a 'model' or 'model_name' attribute."
+            )
         config: dict[str, Any] = {"model": model}
 
         for param in ("max_tokens", "temperature", "top_p", "top_k", "stop_sequences"):

@@ -20,7 +20,6 @@ from langasync.core.batch_api import (
     LanguageModelType,
     Provider,
 )
-from langasync.core.exceptions import provider_error_handling
 
 
 def _to_openai_messages(inp: LanguageModelInput) -> list[dict]:
@@ -72,10 +71,14 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
         self, language_model: LanguageModelType, model_bindings: dict | None = None
     ) -> dict[str, Any]:
         """Extract model config from LangChain model for batch request body."""
-        # Get model name
         model = getattr(language_model, "model_name", None) or getattr(
-            language_model, "model", "gpt-4o-mini"
+            language_model, "model", None
         )
+        if not model:
+            raise ValueError(
+                "Could not determine model name from language model. "
+                "Ensure your model has a 'model' or 'model_name' attribute."
+            )
 
         config: dict[str, Any] = {"model": model}
 
