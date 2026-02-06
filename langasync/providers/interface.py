@@ -147,5 +147,6 @@ class BatchApiAdapterInterface(ABC):
 
         Returns:
             BatchStatusInfo with the job's status after cancellation
+            has finished
         """
         pass

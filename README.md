@@ -19,6 +19,13 @@ result = await batch_job_service.get_results()
 
 No rewrite needed - same chain, just wrapped.
 
+## Cost Savings
+
+Both OpenAI and Anthropic batch APIs offer **50% cost savings** on input and output tokens for workloads that can wait up to 24 hours.
+
+- [OpenAI Batch API Pricing](https://platform.openai.com/docs/pricing)
+- [Anthropic Batch API Pricing](https://docs.anthropic.com/en/docs/build-with-claude/batch-processing)
+
 ## Installation
 
 ```bash

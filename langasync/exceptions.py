@@ -31,6 +31,12 @@ class AuthenticationError(LangAsyncError):
     pass
 
 
+class ApiTimeoutError(LangAsyncError):
+    """Exception raised when provider timesout."""
+
+    pass
+
+
 class BatchProviderApiError(LangAsyncError):
     """Exception raised when provider llm api fails."""
 

@@ -1,5 +1,6 @@
 """OpenAI Batch API adapter."""
 
+import asyncio
 import json
 import os
 import tempfile
@@ -11,8 +12,9 @@ from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.messages.utils import convert_to_openai_messages
 
-from langasync.exceptions import provider_error_handling
+from langasync.exceptions import ApiTimeoutError, provider_error_handling
 from langasync.providers.interface import (
+    FINISHED_STATUSES,
     BatchApiAdapterInterface,
     BatchApiJob,
     BatchResponse,
@@ -280,6 +282,19 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
 
     @provider_error_handling
     async def cancel(self, batch_api_job: BatchApiJob) -> BatchStatusInfo:
-        """Cancel a batch job."""
+        """Cancel a batch job and wait until cancellation completes."""
         await self._client.post(f"{self.base_url}/batches/{batch_api_job.id}/cancel")
-        return await self.get_status(batch_api_job)
+
+        # Poll until batch reaches a terminal state
+        cancel_timeout_seconds = 60
+        for _ in range(cancel_timeout_seconds):
+            status_info = await self.get_status(batch_api_job)
+            if status_info.status in FINISHED_STATUSES:
+                return BatchStatusInfo(
+                    status=BatchStatus.CANCELLED,
+                    total=status_info.total,
+                    completed=status_info.completed,
+                    failed=status_info.failed,
+                )
+            await asyncio.sleep(1)
+        raise ApiTimeoutError(f"Cancel timed out after {cancel_timeout_seconds} seconds")
