@@ -27,4 +27,4 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/test_providers/test_anthropic_message_conversion.py -v
+        run: pytest tests -v
