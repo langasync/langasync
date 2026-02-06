@@ -23,6 +23,7 @@ class ChainParts:
 
     preprocessing: Runnable
     model: BaseLanguageModel | None
+    model_bindings: dict
     postprocessing: Runnable
 
 
@@ -72,7 +73,7 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
     # Find model and scan for hidden models in a single pass
     single_model_index: int | None = None
     for i, step in enumerate(steps):
-        _model = _unwrap_to_model(step)
+        _model, _ = _unwrap_to_model(step)
 
         model_set_in_previous_step = single_model_index is not None
         if _model is not None and model_set_in_previous_step:
@@ -94,6 +95,7 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
         return ChainParts(
             preprocessing=chain,
             model=None,
+            model_bindings={},
             postprocessing=RunnablePassthrough(),
         )
 
@@ -104,9 +106,11 @@ def get_parts_from_chain(chain: Runnable) -> ChainParts:
     preprocessing = _steps_to_runnable(pre_steps)
     postprocessing = _steps_to_runnable(post_steps)
 
+    model, model_bindings = _unwrap_to_model(steps[single_model_index])
     return ChainParts(
         preprocessing=preprocessing,
-        model=_unwrap_to_model(steps[single_model_index]),
+        model=model,
+        model_bindings=model_bindings,
         postprocessing=postprocessing,
     )
 
@@ -125,8 +129,10 @@ def _steps_to_runnable(steps: list[Runnable]) -> Runnable:
         return result
 
 
-def _unwrap_to_model(runnable) -> BaseLanguageModel | None:
-    """Unwrap a runnable to get the underlying BaseLanguageModel, if any.
+def _unwrap_to_model(
+    runnable, bindings: dict | None = None
+) -> tuple[BaseLanguageModel | None, dict]:
+    """Unwrap a runnable to get the underlying BaseLanguageModel and accumulated bindings.
 
     Handles:
     - Direct BaseLanguageModel
@@ -134,20 +140,26 @@ def _unwrap_to_model(runnable) -> BaseLanguageModel | None:
 
     Args:
         runnable: Any LangChain Runnable
+        bindings: Accumulated bindings from outer wrappers (internal use)
 
     Returns:
-        The underlying BaseLanguageModel, or None if not a model
+        Tuple of (model, bindings) where bindings contains merged kwargs from all wrappers
     """
+    if bindings is None:
+        bindings = {}
+
     # Direct model
     if isinstance(runnable, BaseLanguageModel):
-        return runnable
+        return runnable, bindings
 
     # Unwrap RunnableBindingBase (.bind(), .with_config(), etc.)
     if isinstance(runnable, RunnableBindingBase):
-        return _unwrap_to_model(runnable.bound)
+        # Merge kwargs - inner bindings take precedence over outer
+        merged = {**bindings, **runnable.kwargs}
+        return _unwrap_to_model(runnable.bound, merged)
 
     # Not a model
-    return None
+    return None, bindings
 
 
 def _is_retriever(runnable) -> bool:
@@ -257,7 +269,7 @@ def _find_hidden_models(runnable) -> list[BaseLanguageModel]:
         # RunnableParallel.steps__ is a dict of key -> Runnable
         for branch in runnable.steps__.values():
             # Check if branch itself is a model
-            model = _unwrap_to_model(branch)
+            model, _ = _unwrap_to_model(branch)
             if model:
                 models.append(model)
             else:
@@ -268,7 +280,7 @@ def _find_hidden_models(runnable) -> list[BaseLanguageModel]:
     # Check inside nested RunnableSequence
     if isinstance(runnable, RunnableSequence):
         for step in runnable.steps:
-            model = _unwrap_to_model(step)
+            model, _ = _unwrap_to_model(step)
             if model:
                 models.append(model)
             else:

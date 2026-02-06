@@ -86,6 +86,7 @@ class BatchApiAdapterInterface(ABC):
         self,
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
+        model_bindings: dict | None = None,
     ) -> BatchApiJob:
         """Create a new batch job.
 
@@ -93,6 +94,7 @@ class BatchApiAdapterInterface(ABC):
             inputs: List of inputs (LangChain format), one per batch request.
                    Each input can be a string, list of messages, dict, etc.
             language_model: LangChain language model or NullLanguageModel if no model
+            model_bindings: Additional kwargs from .bind() calls (tools, temperature, etc.)
 
         Returns:
             BatchJob handle for the created batch

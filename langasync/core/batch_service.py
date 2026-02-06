@@ -1,6 +1,6 @@
 from __future__ import annotations
 import asyncio
-
+from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.language_models import BaseLanguageModel
@@ -8,12 +8,12 @@ from langchain_core.runnables import Runnable
 
 from langasync.core.exceptions import (
     error_handling,
+    LangAsyncError,
     UnsupportedProviderError,
     FailedLLMOutputError,
     FailedPostProcessingError,
     FailedPreProcessingError,
 )
-from pydantic import BaseModel
 
 from langasync.core.batch_api import (
     BatchApiAdapterInterface,
@@ -57,11 +57,14 @@ def _get_adapter_from_model(model: BaseLanguageModel | None) -> BatchApiAdapterI
     return _get_adapter_from_provider(provider)
 
 
-class ProcessedResults(BaseModel):
+# NOTE: outputting dataclass because we want to allow error types
+# and dont plan on serialising this
+@dataclass
+class ProcessedResults:
     """Result from get_results(), includes status and processed outputs."""
 
     job_id: str
-    results: list[Any] | None
+    results: list[Any | LangAsyncError] | None
     status_info: BatchStatusInfo
 
 
@@ -91,14 +94,20 @@ class BatchJobService:
         preprocessing_chain: Runnable,
         postprocessing_chain: Runnable,
         repository: BatchJobRepository,
+        model_bindings: dict | None = None,
     ) -> "BatchJobService":
+        if model_bindings is None:
+            model_bindings = {}
+
         batch_api_adapter = _get_adapter_from_model(model)
         try:
             preprocessed_inputs = await preprocessing_chain.abatch(inputs)
         except Exception as e:
             raise FailedPreProcessingError(str(e))
 
-        batch_api_job = await batch_api_adapter.create_batch(preprocessed_inputs, model)
+        batch_api_job = await batch_api_adapter.create_batch(
+            preprocessed_inputs, model, model_bindings
+        )
 
         batch_job = BatchJob(
             id=batch_api_job.id,

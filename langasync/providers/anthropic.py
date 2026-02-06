@@ -96,7 +96,9 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
             timeout=60.0,
         )
 
-    def _get_model_config(self, language_model: LanguageModelType) -> dict[str, Any]:
+    def _get_model_config(
+        self, language_model: LanguageModelType, model_bindings: dict | None = None
+    ) -> dict[str, Any]:
         """Extract model config from LangChain model for batch request."""
         model = getattr(language_model, "model_name", None) or getattr(
             language_model, "model", "claude-sonnet-4-5-20250929"
@@ -114,6 +116,10 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
 
         config.update(getattr(language_model, "model_kwargs", {}))
 
+        # Merge bindings from .bind() calls (tools, tool_choice, etc.)
+        if model_bindings:
+            config.update(model_bindings)
+
         return config
 
     @provider_error_handling
@@ -121,9 +127,10 @@ class AnthropicBatchApiAdapter(BatchApiAdapterInterface):
         self,
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
+        model_bindings: dict | None = None,
     ) -> BatchApiJob:
         """Create a new batch job with Anthropic."""
-        model_config = self._get_model_config(language_model)
+        model_config = self._get_model_config(language_model, model_bindings)
 
         requests = [
             _to_anthropic_request(inp, model_config, str(i)) for i, inp in enumerate(inputs)

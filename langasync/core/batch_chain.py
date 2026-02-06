@@ -8,6 +8,7 @@ class BatchChainWrapper:
         parts = get_parts_from_chain(chain)
 
         self.model = parts.model
+        self.model_bindings = parts.model_bindings
         self.preprocessing_chain = parts.preprocessing
         self.postprocessing_chain = parts.postprocessing
         self.repository = repository
@@ -19,6 +20,7 @@ class BatchChainWrapper:
             self.preprocessing_chain,
             self.postprocessing_chain,
             self.repository,
+            self.model_bindings,
         )
 
 

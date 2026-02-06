@@ -239,6 +239,7 @@ class TestWrappedModels:
         parts = get_parts_from_chain(bound_model)
 
         assert parts.model is chat_model
+        assert parts.model_bindings == {"temperature": 0.5}
         assert isinstance(parts.preprocessing, RunnablePassthrough)
         assert isinstance(parts.postprocessing, RunnablePassthrough)
 
@@ -290,8 +291,41 @@ class TestWrappedModels:
         parts = get_parts_from_chain(chain)
 
         assert parts.model is chat_model
+        assert parts.model_bindings == {"a": 1, "b": 2, "c": 3}
         assert parts.preprocessing is chat_prompt
         assert isinstance(parts.postprocessing, RunnablePassthrough)
+
+    def test_model_with_tools_binding(
+        self,
+        chat_prompt: ChatPromptTemplate,
+        chat_model: MockChatModel,
+    ):
+        """Chain with model bound with tools."""
+        tools = [{"type": "function", "function": {"name": "get_weather"}}]
+        bound_model = chat_model.bind(tools=tools, tool_choice="auto")
+        chain = chat_prompt | bound_model
+        parts = get_parts_from_chain(chain)
+
+        assert parts.model is chat_model
+        assert parts.model_bindings == {"tools": tools, "tool_choice": "auto"}
+        assert parts.preprocessing is chat_prompt
+
+    def test_model_with_tools_and_temperature(
+        self,
+        chat_prompt: ChatPromptTemplate,
+        chat_model: MockChatModel,
+        str_parser: StrOutputParser,
+    ):
+        """Chain with model bound with both tools and temperature."""
+        tools = [{"type": "function", "function": {"name": "search"}}]
+        bound_model = chat_model.bind(temperature=0.7).bind(tools=tools)
+        chain = chat_prompt | bound_model | str_parser
+        parts = get_parts_from_chain(chain)
+
+        assert parts.model is chat_model
+        assert parts.model_bindings == {"temperature": 0.7, "tools": tools}
+        assert parts.preprocessing is chat_prompt
+        assert parts.postprocessing is str_parser
 
 
 class TestMultipleModels:
@@ -437,38 +471,57 @@ class TestHelperFunctions:
     """Tests for internal helper functions."""
 
     def test_unwrap_to_model_direct_model(self, chat_model: MockChatModel):
-        """_unwrap_to_model returns model directly."""
-        result = _unwrap_to_model(chat_model)
-        assert result is chat_model
+        """_unwrap_to_model returns model directly with empty bindings."""
+        model, bindings = _unwrap_to_model(chat_model)
+        assert model is chat_model
+        assert bindings == {}
 
     def test_unwrap_to_model_bound(self, chat_model: MockChatModel):
-        """_unwrap_to_model unwraps bound model."""
+        """_unwrap_to_model unwraps bound model and returns bindings."""
         bound = chat_model.bind(temperature=0.5)
-        result = _unwrap_to_model(bound)
-        assert result is chat_model
+        model, bindings = _unwrap_to_model(bound)
+        assert model is chat_model
+        assert bindings == {"temperature": 0.5}
 
     def test_unwrap_to_model_configured(self, chat_model: MockChatModel):
         """_unwrap_to_model unwraps configured model."""
         configured = chat_model.with_config(tags=["test"])
-        result = _unwrap_to_model(configured)
-        assert result is chat_model
+        model, bindings = _unwrap_to_model(configured)
+        assert model is chat_model
 
     def test_unwrap_to_model_nested(self, chat_model: MockChatModel):
-        """_unwrap_to_model handles nested wrappings."""
+        """_unwrap_to_model handles nested wrappings and merges bindings."""
         wrapped = chat_model.bind(a=1).with_config(tags=["x"]).bind(b=2)
-        result = _unwrap_to_model(wrapped)
-        assert result is chat_model
+        model, bindings = _unwrap_to_model(wrapped)
+        assert model is chat_model
+        assert bindings == {"a": 1, "b": 2}
 
     def test_unwrap_to_model_non_model(self, str_parser: StrOutputParser):
         """_unwrap_to_model returns None for non-model."""
-        result = _unwrap_to_model(str_parser)
-        assert result is None
+        model, bindings = _unwrap_to_model(str_parser)
+        assert model is None
 
     def test_unwrap_to_model_lambda(self):
         """_unwrap_to_model returns None for lambda."""
         lambda_r = RunnableLambda(lambda x: x)
-        result = _unwrap_to_model(lambda_r)
-        assert result is None
+        model, bindings = _unwrap_to_model(lambda_r)
+        assert model is None
+
+    def test_unwrap_to_model_with_tools(self, chat_model: MockChatModel):
+        """_unwrap_to_model captures tools from .bind()."""
+        tools = [{"type": "function", "function": {"name": "get_weather"}}]
+        bound = chat_model.bind(tools=tools, tool_choice="auto")
+        model, bindings = _unwrap_to_model(bound)
+        assert model is chat_model
+        assert bindings == {"tools": tools, "tool_choice": "auto"}
+
+    def test_unwrap_to_model_with_tools_and_other_bindings(self, chat_model: MockChatModel):
+        """_unwrap_to_model captures tools alongside other bindings."""
+        tools = [{"type": "function", "function": {"name": "search"}}]
+        bound = chat_model.bind(temperature=0.7).bind(tools=tools)
+        model, bindings = _unwrap_to_model(bound)
+        assert model is chat_model
+        assert bindings == {"temperature": 0.7, "tools": tools}
 
     def test_steps_to_runnable_empty(self):
         """_steps_to_runnable returns passthrough for empty list."""

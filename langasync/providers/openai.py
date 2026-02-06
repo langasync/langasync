@@ -68,7 +68,9 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
             timeout=60.0,
         )
 
-    def _get_model_config(self, language_model: LanguageModelType) -> dict[str, Any]:
+    def _get_model_config(
+        self, language_model: LanguageModelType, model_bindings: dict | None = None
+    ) -> dict[str, Any]:
         """Extract model config from LangChain model for batch request body."""
         # Get model name
         model = getattr(language_model, "model_name", None) or getattr(
@@ -93,6 +95,10 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
 
         # Merge any extra model_kwargs
         config.update(getattr(language_model, "model_kwargs", {}))
+
+        # Merge bindings from .bind() calls (tools, tool_choice, etc.)
+        if model_bindings:
+            config.update(model_bindings)
 
         return config
 
@@ -125,9 +131,10 @@ class OpenAIBatchApiAdapter(BatchApiAdapterInterface):
         self,
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
+        model_bindings: dict | None = None,
     ) -> BatchApiJob:
         """Create a new batch job with OpenAI."""
-        model_config = self._get_model_config(language_model)
+        model_config = self._get_model_config(language_model, model_bindings)
 
         # Build JSONL content
         lines = []

@@ -71,6 +71,7 @@ class NoModelBatchApiAdapter(BatchApiAdapterInterface):
         self,
         inputs: list[LanguageModelInput],
         language_model: LanguageModelType,
+        model_bindings: dict | None = None,
     ) -> BatchApiJob:
         batch_id = f"no-model-{uuid.uuid4()}"
         batch_api_job = BatchApiJob(
