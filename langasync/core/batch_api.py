@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from pydantic import BaseModel, Field
 
@@ -53,7 +54,7 @@ class BatchResponse(BaseModel):
 
     custom_id: str
     success: bool
-    content: Any = None
+    content: BaseMessage | Any = None
     error: dict[str, Any] | None = None
     usage: dict[str, Any] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
