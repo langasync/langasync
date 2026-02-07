@@ -118,5 +118,3 @@ def str_parser() -> StrOutputParser:
 def mock_retriever() -> MockRetriever:
     """Return a mock retriever."""
     return MockRetriever()
-
-
