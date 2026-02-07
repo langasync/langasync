@@ -49,7 +49,7 @@ FINISHED_STATUSES = {
 }
 
 
-class BatchResponse(BaseModel):
+class BatchItem(BaseModel):
     """Response for a single request in a batch."""
 
     custom_id: str
@@ -127,7 +127,7 @@ class ProviderJobAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         """Get results from a completed batch job.
 
         Args:

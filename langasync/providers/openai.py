@@ -17,7 +17,7 @@ from langasync.providers.interface import (
     FINISHED_STATUSES,
     ProviderJobAdapterInterface,
     ProviderJob,
-    BatchResponse,
+    BatchItem,
     BatchStatus,
     BatchStatusInfo,
     LanguageModelType,
@@ -215,7 +215,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
             for batch in data.get("data", [])
         ]
 
-    def _parse_output_line(self, data: dict) -> BatchResponse:
+    def _parse_output_line(self, data: dict) -> BatchItem:
         """Parse a single line from output/error file."""
         custom_id = data.get("custom_id", "")
         response_data = data.get("response", {})
@@ -224,7 +224,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
 
         # Check for errors (explicit error field or non-200 status)
         if error_data or status_code != 200:
-            return BatchResponse(
+            return BatchItem(
                 custom_id=custom_id,
                 success=False,
                 error=error_data or {"message": f"Request failed with status {status_code}"},
@@ -241,7 +241,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         else:
             ai_message = AIMessage(content="")
 
-        return BatchResponse(
+        return BatchItem(
             custom_id=custom_id,
             success=True,
             content=ai_message,
@@ -249,14 +249,14 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         )
 
     @provider_error_handling
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         """Get results from a completed batch job."""
         response = await self._client.get(f"{self.base_url}/batches/{batch_api_job.id}")
         response.raise_for_status()
         batch_data = response.json()
 
         # Use dict to deduplicate by custom_id (error file takes precedence)
-        results_by_id: dict[str, BatchResponse] = {}
+        results_by_id: dict[str, BatchItem] = {}
 
         # Parse results from output file first
         output_file_id = batch_data.get("output_file_id")

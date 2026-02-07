@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage
 from langasync.providers.openai import OpenAIProviderJobAdapter
 from langasync.providers.interface import (
     ProviderJob,
-    BatchResponse,
+    BatchItem,
     BatchStatus,
     BatchStatusInfo,
     Provider,
@@ -289,13 +289,13 @@ class TestGetResults:
         results = await adapter.get_results(sample_batch_job)
 
         assert results == [
-            BatchResponse(
+            BatchItem(
                 custom_id="0",
                 success=True,
                 content=AIMessage(content="Hello!"),
                 usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
             ),
-            BatchResponse(
+            BatchItem(
                 custom_id="1",
                 success=True,
                 content=AIMessage(content="I'm fine!"),
@@ -337,13 +337,13 @@ class TestGetResults:
         results = await adapter.get_results(sample_batch_job)
 
         assert results == [
-            BatchResponse(
+            BatchItem(
                 custom_id="0",
                 success=True,
                 content=AIMessage(content="Success!"),
                 usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
             ),
-            BatchResponse(
+            BatchItem(
                 custom_id="1",
                 success=False,
                 error={"message": "Rate limit exceeded", "code": "rate_limit_exceeded"},
@@ -382,7 +382,7 @@ class TestGetResults:
         results = await adapter.get_results(sample_batch_job)
 
         assert results == [
-            BatchResponse(
+            BatchItem(
                 custom_id="0",
                 success=True,
                 content=AIMessage(

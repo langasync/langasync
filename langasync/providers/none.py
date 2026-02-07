@@ -13,7 +13,7 @@ from langasync.exceptions import provider_error_handling
 from langasync.providers.interface import (
     ProviderJobAdapterInterface,
     ProviderJob,
-    BatchResponse,
+    BatchItem,
     BatchStatus,
     BatchStatusInfo,
     LanguageModelType,
@@ -97,10 +97,10 @@ class NoModelProviderJobAdapter(ProviderJobAdapterInterface):
         raise NotImplementedError("list_batches not implemented on NoModelProviderJobAdapter")
 
     @provider_error_handling
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         inputs = await self._persistence.load(batch_api_job.id)
         return [
-            BatchResponse(
+            BatchItem(
                 custom_id=str(i),
                 success=True,
                 content=inp,

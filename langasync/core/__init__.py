@@ -8,7 +8,7 @@ from ..exceptions import (
 from ..providers.interface import (
     ProviderJobAdapterInterface,
     ProviderJob,
-    BatchResponse,
+    BatchItem,
     BatchStatus,
     BatchStatusInfo,
     FINISHED_STATUSES,
@@ -29,7 +29,7 @@ __all__ = [
     "BatchJob",
     "BatchJobRepository",
     "FileSystemBatchJobRepository",
-    "BatchResponse",
+    "BatchItem",
     "BatchStatus",
     "BatchStatusInfo",
     "FINISHED_STATUSES",

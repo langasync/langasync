@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage
 from langasync.providers.anthropic import AnthropicProviderJobAdapter
 from langasync.providers.interface import (
     ProviderJob,
-    BatchResponse,
+    BatchItem,
     BatchStatus,
     BatchStatusInfo,
     Provider,
@@ -295,13 +295,13 @@ class TestGetResults:
         results = await adapter.get_results(sample_batch_job)
 
         assert results == [
-            BatchResponse(
+            BatchItem(
                 custom_id="0",
                 success=True,
                 content=AIMessage(content="Hello!"),
                 usage={"input_tokens": 10, "output_tokens": 5},
             ),
-            BatchResponse(
+            BatchItem(
                 custom_id="1",
                 success=True,
                 content=AIMessage(content="I'm fine!"),
@@ -339,13 +339,13 @@ class TestGetResults:
         results = await adapter.get_results(sample_batch_job)
 
         assert results == [
-            BatchResponse(
+            BatchItem(
                 custom_id="0",
                 success=True,
                 content=AIMessage(content="Success!"),
                 usage={"input_tokens": 10, "output_tokens": 5},
             ),
-            BatchResponse(
+            BatchItem(
                 custom_id="1",
                 success=False,
                 error={"type": "api_error", "message": "Rate limit exceeded"},
@@ -384,7 +384,7 @@ class TestGetResults:
         results = await adapter.get_results(sample_batch_job)
 
         assert results == [
-            BatchResponse(
+            BatchItem(
                 custom_id="0",
                 success=True,
                 content=AIMessage(

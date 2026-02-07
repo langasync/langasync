@@ -15,7 +15,7 @@ from langasync.providers.interface import (
     BatchStatus,
     BatchStatusInfo,
     ProviderJob,
-    BatchResponse,
+    BatchItem,
 )
 from langasync.providers import Provider
 from langasync.providers.none import NoModelProviderJobAdapter
@@ -27,7 +27,7 @@ class FailingProviderJobAdapter(NoModelProviderJobAdapter):
     async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         return BatchStatusInfo(status=BatchStatus.FAILED, total=1, completed=0, failed=1)
 
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         # Return empty results for failed job
         return []
 

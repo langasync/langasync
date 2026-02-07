@@ -21,7 +21,7 @@ from langasync.providers.interface import (
     BatchStatusInfo,
     FINISHED_STATUSES,
     BatchStatus,
-    BatchResponse,
+    BatchItem,
 )
 from langasync.core.batch_job_repository import BatchJob, BatchJobRepository
 from langasync.providers import ADAPTER_REGISTRY, Provider
@@ -180,10 +180,10 @@ class BatchJobService:
             )
         return services
 
-    async def _postprocess(self, results: list[BatchResponse]) -> list[Any]:
+    async def _postprocess(self, results: list[BatchItem]) -> list[Any]:
         """Run the postprocessing chain on batch results."""
 
-        async def _process_example_if_successful(response: BatchResponse):
+        async def _process_example_if_successful(response: BatchItem):
             if response.success:
                 try:
                     return await self.postprocessing_chain.ainvoke(response.content)

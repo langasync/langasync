@@ -27,7 +27,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run unit tests
-        run: pytest tests -v -m "not integration"
+        run: pytest tests -v
 
   integration:
     runs-on: ubuntu-latest
@@ -50,4 +50,4 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: pytest -v -m integration
+        run: pytest tests/integration -v -o "addopts="
