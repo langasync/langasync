@@ -1,9 +1,6 @@
 <p align="center">
   <a href="https://github.com/256Bab/langasync">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://via.placeholder.com/400x100/1a1a2e/ffffff?text=langasync">
-      <img alt="langasync" src="https://via.placeholder.com/400x100/ffffff/1a1a2e?text=langasync" width="400">
-    </picture>
+    <img alt="langasync" src="langasync.png" width="400">
   </a>
 </p>
 
