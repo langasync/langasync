@@ -28,7 +28,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from langasync.core import FileSystemBatchJobRepository, batch_chain, BatchPoller
-from langasync.core.batch_api import BatchStatus
+from langasync.providers.interface import BatchStatus
 
 # Persistent storage directory
 JOBS_DIR = Path(__file__).parent / ".batch_jobs"

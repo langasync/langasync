@@ -245,7 +245,9 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
             )
         else:
             # errored, canceled, or expired
-            error = result.get("error", {"type": result_type, "message": result_type})
+            # Error structure: result.error.error contains the actual error object
+            error_wrapper = result.get("error", {})
+            error = error_wrapper.get("error", {"type": result_type, "message": result_type})
             return BatchResponse(
                 custom_id=custom_id,
                 success=False,

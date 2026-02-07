@@ -1,13 +1,21 @@
 """OpenAI API response factories.
 
 These factories are the single source of truth for OpenAI API response structures.
-When the API schema changes, update these factories and all tests will follow.
+When the SDK updates, validation will fail if our factories produce incompatible structures.
 
 Reference: https://platform.openai.com/docs/api-reference/batch
 """
 
 import json
 from typing import Any
+
+from tests.fixtures.schema_validator import (
+    validate_openai_batch,
+    validate_openai_file,
+    validate_openai_chat_completion,
+    validate_openai_batch_error,
+    validate_openai_error_object,
+)
 
 
 def openai_file_upload_response(
@@ -16,19 +24,23 @@ def openai_file_upload_response(
     purpose: str = "batch",
     bytes_size: int = 1024,
     created_at: int = 1705320000,
+    status: str = "processed",
 ) -> dict[str, Any]:
     """Factory for OpenAI file upload response.
 
     Used by: POST /v1/files
     """
-    return {
+    response = {
         "id": file_id,
         "object": "file",
         "bytes": bytes_size,
         "created_at": created_at,
         "filename": filename,
         "purpose": purpose,
+        "status": status,
     }
+    validate_openai_file(response)
+    return response
 
 
 def openai_batch_response(
@@ -63,6 +75,7 @@ def openai_batch_response(
     if request_counts is not None:
         response["request_counts"] = request_counts
 
+    validate_openai_batch(response)
     return response
 
 
@@ -80,7 +93,7 @@ def openai_batch_status_response(
 
     Used by: GET /v1/batches/{id}
     """
-    return openai_batch_response(
+    response = openai_batch_response(
         batch_id=batch_id,
         status=status,
         input_file_id=input_file_id,
@@ -92,6 +105,8 @@ def openai_batch_status_response(
             "failed": failed,
         },
     )
+    validate_openai_batch(response)
+    return response
 
 
 def openai_output_line(
@@ -100,34 +115,40 @@ def openai_output_line(
     prompt_tokens: int = 10,
     completion_tokens: int = 5,
     status_code: int = 200,
+    created: int = 1705320000,
+    model: str = "gpt-4",
 ) -> dict[str, Any]:
     """Factory for a successful output line in OpenAI JSONL results.
 
     Used by: Output JSONL from output_file_id
     """
+    body = {
+        "id": f"chatcmpl-{custom_id}",
+        "object": "chat.completion",
+        "created": created,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": content,
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        },
+    }
+    validate_openai_chat_completion(body)
     return {
         "custom_id": custom_id,
         "response": {
             "status_code": status_code,
-            "body": {
-                "id": f"chatcmpl-{custom_id}",
-                "object": "chat.completion",
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": content,
-                        },
-                        "finish_reason": "stop",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": prompt_tokens + completion_tokens,
-                },
-            },
+            "body": body,
         },
     }
 
@@ -142,16 +163,16 @@ def openai_error_output_line(
 
     Used by: Output JSONL from output_file_id
     """
+    error = {
+        "message": error_message,
+        "type": error_type,
+    }
+    validate_openai_error_object(error)
     return {
         "custom_id": custom_id,
         "response": {
             "status_code": status_code,
-            "body": {
-                "error": {
-                    "message": error_message,
-                    "type": error_type,
-                }
-            },
+            "body": {"error": error},
         },
     }
 
@@ -165,12 +186,14 @@ def openai_error_file_line(
 
     Used by: Error JSONL from error_file_id
     """
+    error = {
+        "message": error_message,
+        "code": error_code,
+    }
+    validate_openai_batch_error(error)
     return {
         "custom_id": custom_id,
-        "error": {
-            "message": error_message,
-            "code": error_code,
-        },
+        "error": error,
     }
 
 
@@ -181,44 +204,50 @@ def openai_tool_call_output_line(
     arguments: str = '{"location": "NYC"}',
     prompt_tokens: int = 10,
     completion_tokens: int = 20,
+    created: int = 1705320000,
+    model: str = "gpt-4",
 ) -> dict[str, Any]:
     """Factory for a tool call output line in OpenAI JSONL results.
 
     Used by: Output JSONL from output_file_id
     """
+    body = {
+        "id": f"chatcmpl-{custom_id}",
+        "object": "chat.completion",
+        "created": created,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": tool_id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": arguments,
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        },
+    }
+    validate_openai_chat_completion(body)
     return {
         "custom_id": custom_id,
         "response": {
             "status_code": 200,
-            "body": {
-                "id": f"chatcmpl-{custom_id}",
-                "object": "chat.completion",
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": None,
-                            "tool_calls": [
-                                {
-                                    "id": tool_id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": tool_name,
-                                        "arguments": arguments,
-                                    },
-                                }
-                            ],
-                        },
-                        "finish_reason": "tool_calls",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": prompt_tokens + completion_tokens,
-                },
-            },
+            "body": body,
         },
     }
 

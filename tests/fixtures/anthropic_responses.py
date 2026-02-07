@@ -1,7 +1,7 @@
 """Anthropic API response factories.
 
 These factories are the single source of truth for Anthropic API response structures.
-When the API schema changes, update these factories and all tests will follow.
+When the SDK updates, validation will fail if our factories produce incompatible structures.
 
 Reference: https://docs.anthropic.com/en/docs/build-with-claude/message-batches
 """
@@ -9,11 +9,14 @@ Reference: https://docs.anthropic.com/en/docs/build-with-claude/message-batches
 import json
 from typing import Any
 
+from tests.fixtures.schema_validator import validate_anthropic_batch, validate_anthropic_result_line
+
 
 def anthropic_batch_response(
     batch_id: str = "msgbatch_abc123",
     processing_status: str = "in_progress",
     created_at: str = "2024-01-15T12:00:00Z",
+    expires_at: str = "2024-01-16T12:00:00Z",
     request_counts: dict[str, int] | None = None,
     results_url: str | None = None,
 ) -> dict[str, Any]:
@@ -21,19 +24,26 @@ def anthropic_batch_response(
 
     Used by: POST /v1/messages/batches, GET /v1/messages/batches/{id}
     """
-    response = {
+    response: dict[str, Any] = {
         "id": batch_id,
         "type": "message_batch",
         "processing_status": processing_status,
         "created_at": created_at,
+        "expires_at": expires_at,
+        "request_counts": request_counts
+        or {
+            "processing": 0,
+            "succeeded": 0,
+            "errored": 0,
+            "canceled": 0,
+            "expired": 0,
+        },
     }
-
-    if request_counts is not None:
-        response["request_counts"] = request_counts
 
     if results_url is not None:
         response["results_url"] = results_url
 
+    validate_anthropic_batch(response)
     return response
 
 
@@ -51,7 +61,7 @@ def anthropic_batch_status_response(
 
     Used by: GET /v1/messages/batches/{id}
     """
-    return anthropic_batch_response(
+    response = anthropic_batch_response(
         batch_id=batch_id,
         processing_status=processing_status,
         request_counts={
@@ -63,6 +73,8 @@ def anthropic_batch_status_response(
         },
         results_url=results_url,
     )
+    validate_anthropic_batch(response)
+    return response
 
 
 def anthropic_result_line(
@@ -75,7 +87,7 @@ def anthropic_result_line(
 
     Used by: Results JSONL from results_url
     """
-    return {
+    response = {
         "custom_id": custom_id,
         "result": {
             "type": "succeeded",
@@ -93,6 +105,8 @@ def anthropic_result_line(
             },
         },
     }
+    validate_anthropic_result_line(response)
+    return response
 
 
 def anthropic_error_result_line(
@@ -104,16 +118,21 @@ def anthropic_error_result_line(
 
     Used by: Results JSONL from results_url
     """
-    return {
+    response = {
         "custom_id": custom_id,
         "result": {
             "type": error_type,
             "error": {
-                "type": "api_error",
-                "message": error_message,
+                "type": "error",
+                "error": {
+                    "type": "api_error",
+                    "message": error_message,
+                },
             },
         },
     }
+    validate_anthropic_result_line(response)
+    return response
 
 
 def anthropic_tool_use_result_line(
@@ -131,7 +150,7 @@ def anthropic_tool_use_result_line(
     if tool_input is None:
         tool_input = {"location": "NYC"}
 
-    return {
+    response = {
         "custom_id": custom_id,
         "result": {
             "type": "succeeded",
@@ -157,6 +176,8 @@ def anthropic_tool_use_result_line(
             },
         },
     }
+    validate_anthropic_result_line(response)
+    return response
 
 
 def anthropic_results_jsonl(results: list[dict[str, Any]]) -> str:
