@@ -18,7 +18,7 @@ from langasync.providers.interface import (
     FINISHED_STATUSES,
     ProviderJobAdapterInterface,
     ProviderJob,
-    BatchResponse,
+    BatchItem,
     BatchStatus,
     BatchStatusInfo,
     LanguageModelType,
@@ -210,7 +210,7 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
             for batch in data.get("data", [])
         ]
 
-    def _parse_result_line(self, data: dict) -> BatchResponse:
+    def _parse_result_line(self, data: dict) -> BatchItem:
         """Parse a single line from results JSONL."""
         custom_id = data.get("custom_id", "")
         result = data.get("result", {})
@@ -237,7 +237,7 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
                 # Multiple blocks or citations -> list content
                 ai_message = AIMessage(content=content_blocks)
 
-            return BatchResponse(
+            return BatchItem(
                 custom_id=custom_id,
                 success=True,
                 content=ai_message,
@@ -248,14 +248,14 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
             # Error structure: result.error.error contains the actual error object
             error_wrapper = result.get("error", {})
             error = error_wrapper.get("error", {"type": result_type, "message": result_type})
-            return BatchResponse(
+            return BatchItem(
                 custom_id=custom_id,
                 success=False,
                 error=error,
             )
 
     @provider_error_handling
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         """Get results from a completed batch job."""
         # First get batch info to get results_url
         response = await self._client.get(f"{self.base_url}/v1/messages/batches/{batch_api_job.id}")

@@ -19,7 +19,7 @@ from langasync.providers.interface import (
     ProviderJob,
     BatchStatus,
     BatchStatusInfo,
-    BatchResponse,
+    BatchItem,
 )
 from langasync.providers.none import NoModelProviderJobAdapter
 
@@ -46,7 +46,7 @@ class MockInProgressApiAdapter(ProviderJobAdapterInterface):
     async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         return []
 
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         return []
 
     async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
@@ -81,7 +81,7 @@ class MockFailedApiAdapter(ProviderJobAdapterInterface):
     async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         return []
 
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         return []
 
     async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
@@ -113,9 +113,9 @@ class MockAdapterWithFailedResponse(ProviderJobAdapterInterface):
     async def list_batches(self, limit: int = 20) -> list[ProviderJob]:
         return []
 
-    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchResponse]:
+    async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         return [
-            BatchResponse(
+            BatchItem(
                 custom_id=str(i),
                 success=(i not in self.failed_indices),
                 content=f"result_{i}" if i not in self.failed_indices else None,
