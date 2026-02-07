@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/yourusername/langasync">
+  <a href="https://github.com/256Bab/langasync">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://via.placeholder.com/400x100/1a1a2e/ffffff?text=langasync">
       <img alt="langasync" src="https://via.placeholder.com/400x100/ffffff/1a1a2e?text=langasync" width="400">
@@ -14,8 +14,8 @@
 <p align="center">
   <a href="https://pypi.org/project/langasync/"><img alt="PyPI" src="https://img.shields.io/pypi/v/langasync?color=blue"></a>
   <a href="https://pypi.org/project/langasync/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/langasync"></a>
-  <a href="https://github.com/yourusername/langasync/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-BSL--1.1-blue"></a>
-  <a href="https://github.com/yourusername/langasync/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/yourusername/langasync/actions/workflows/test.yml/badge.svg"></a>
+  <a href="https://github.com/256Bab/langasync/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-BSL--1.1-blue"></a>
+  <a href="https://github.com/256Bab/langasync/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/256Bab/langasync/actions/workflows/test.yml/badge.svg"></a>
 </p>
 
 <p align="center">
@@ -213,7 +213,7 @@ python examples/openai_example.py fetch
 ### Setup
 
 ```bash
-git clone https://github.com/yourusername/langasync.git
+git clone https://github.com/256Bab/langasync.git
 cd langasync
 pip install -e ".[dev]"
 ```
@@ -230,7 +230,7 @@ pytest tests/integration -o "addopts="
 
 ## Contributing
 
-Contributions are welcome! See our [contributing guidelines](CONTRIBUTING.md).
+Contributions are welcome!
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -240,8 +240,8 @@ Contributions are welcome! See our [contributing guidelines](CONTRIBUTING.md).
 
 ## Community
 
-- [GitHub Issues](https://github.com/yourusername/langasync/issues) — Bug reports and feature requests
-- [GitHub Discussions](https://github.com/yourusername/langasync/discussions) — Questions and ideas
+- [GitHub Issues](https://github.com/256Bab/langasync/issues) — Bug reports and feature requests
+- [GitHub Discussions](https://github.com/256Bab/langasync/discussions) — Questions and ideas
 
 ## License
 
