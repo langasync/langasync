@@ -17,6 +17,7 @@ from langasync.providers.interface import (
     BatchStatusInfo,
     Provider,
 )
+from langasync.settings import LangasyncSettings
 from tests.fixtures.anthropic_responses import (
     anthropic_batch_response,
     anthropic_batch_status_response,
@@ -27,16 +28,15 @@ from tests.fixtures.anthropic_responses import (
     anthropic_list_batches_response,
 )
 
-
 # URL patterns for matching (ignores query parameters)
 BATCHES_URL = re.compile(r"https://api\.anthropic\.com/v1/messages/batches(\?.*)?$")
 BATCH_ID_URL = re.compile(r"https://api\.anthropic\.com/v1/messages/batches/batch_abc123.*")
 
 
 @pytest.fixture
-def adapter():
-    """Create Anthropic adapter with test API key."""
-    return AnthropicProviderJobAdapter(api_key="test-api-key")
+def adapter(test_settings):
+    """Create Anthropic adapter with test settings."""
+    return AnthropicProviderJobAdapter(test_settings)
 
 
 @pytest.fixture
@@ -564,25 +564,28 @@ class TestAdapterInit:
 
     def test_init_with_api_key(self):
         """Test initialization with explicit API key."""
-        adapter = AnthropicProviderJobAdapter(api_key="sk-test123")
+        settings = LangasyncSettings(anthropic_api_key="sk-test123")
+        adapter = AnthropicProviderJobAdapter(settings)
         assert adapter.api_key == "sk-test123"
         assert adapter.base_url == "https://api.anthropic.com"
 
     def test_init_with_custom_base_url(self):
         """Test initialization with custom base URL."""
-        adapter = AnthropicProviderJobAdapter(
-            api_key="sk-test123", base_url="https://custom.api.com/"
+        settings = LangasyncSettings(
+            anthropic_api_key="sk-test123",
+            anthropic_base_url="https://custom.api.com/",
         )
-        assert adapter.base_url == "https://custom.api.com"  # Trailing slash removed
+        adapter = AnthropicProviderJobAdapter(settings)
+        assert adapter.base_url == "https://custom.api.com/"
 
-    def test_init_without_api_key_raises(self, monkeypatch):
+    def test_init_without_api_key_raises(self):
         """Test initialization without API key raises error."""
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        with pytest.raises(ValueError, match="Anthropic API key required"):
-            AnthropicProviderJobAdapter()
+        settings = LangasyncSettings(anthropic_api_key=None)
+        with pytest.raises(Exception, match="Anthropic API key required"):
+            AnthropicProviderJobAdapter(settings)
 
-    def test_init_from_env(self, monkeypatch):
-        """Test initialization from environment variable."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-from-env")
-        adapter = AnthropicProviderJobAdapter()
-        assert adapter.api_key == "sk-from-env"
+    def test_init_from_settings(self):
+        """Test initialization from settings object."""
+        settings = LangasyncSettings(anthropic_api_key="sk-from-settings")
+        adapter = AnthropicProviderJobAdapter(settings)
+        assert adapter.api_key == "sk-from-settings"

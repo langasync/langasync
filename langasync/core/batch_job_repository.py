@@ -9,6 +9,7 @@ from typing import Any
 import cloudpickle
 from langchain_core.runnables import Runnable
 
+from langasync.settings import LangasyncSettings
 from langasync.providers.interface import Provider, BatchStatus
 
 
@@ -74,8 +75,8 @@ class FileSystemBatchJobRepository(BatchJobRepository):
     Stores each job as a JSON file in the specified directory.
     """
 
-    def __init__(self, storage_dir: Path):
-        self.storage_dir = Path(storage_dir)
+    def __init__(self, settings: LangasyncSettings):
+        self.storage_dir = Path(settings.base_storage_path) / "batch_jobs"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
     def _job_path(self, job_id: str) -> Path:
@@ -139,3 +140,10 @@ class FileSystemBatchJobRepository(BatchJobRepository):
         path = self._job_path(job_id)
         if path.exists():
             path.unlink()
+
+
+def batch_job_repository_factory(settings: LangasyncSettings):
+    if settings.base_storage_path:
+        return FileSystemBatchJobRepository(settings)
+    else:
+        raise NotImplementedError()

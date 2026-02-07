@@ -12,7 +12,8 @@ from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.messages.utils import convert_to_openai_messages
 
-from langasync.exceptions import ApiTimeoutError, provider_error_handling
+from langasync.exceptions import ApiTimeoutError, provider_error_handling, AuthenticationError
+from langasync.settings import LangasyncSettings
 from langasync.providers.interface import (
     FINISHED_STATUSES,
     ProviderJobAdapterInterface,
@@ -54,17 +55,14 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         base_url: OpenAI API base URL. Defaults to https://api.openai.com/v1
     """
 
-    def __init__(
-        self,
-        api_key: str | None = None,
-        base_url: str | None = None,
-    ):
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+    def __init__(self, settings: LangasyncSettings):
+        self.api_key = settings.openai_api_key
+        self.base_url = settings.openai_base_url
         if not self.api_key:
-            raise ValueError("OpenAI API key required. Set OPENAI_API_KEY or pass api_key.")
-        self.base_url = (
-            base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-        ).rstrip("/")
+            raise AuthenticationError(
+                "OpenAI API key required. Set OPENAI_API_KEY or pass api_key."
+            )
+
         self._client = httpx.AsyncClient(
             headers={"Authorization": f"Bearer {self.api_key}"},
             timeout=60.0,

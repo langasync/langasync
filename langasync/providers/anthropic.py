@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 from datetime import datetime
 from typing import Any
 
@@ -13,7 +12,9 @@ from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompt_values import PromptValue
 
-from langasync.exceptions import ApiTimeoutError, provider_error_handling
+from langasync.exceptions import ApiTimeoutError, AuthenticationError, provider_error_handling
+from langasync.settings import LangasyncSettings
+
 from langasync.providers.interface import (
     FINISHED_STATUSES,
     ProviderJobAdapterInterface,
@@ -90,15 +91,13 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
         base_url: Anthropic API base URL. Defaults to https://api.anthropic.com
     """
 
-    def __init__(
-        self,
-        api_key: str | None = None,
-        base_url: str | None = None,
-    ):
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    def __init__(self, settings: LangasyncSettings):
+        self.api_key = settings.anthropic_api_key
+        self.base_url = settings.anthropic_base_url
         if not self.api_key:
-            raise ValueError("Anthropic API key required. Set ANTHROPIC_API_KEY or pass api_key.")
-        self.base_url = (base_url or "https://api.anthropic.com").rstrip("/")
+            raise AuthenticationError(
+                "Anthropic API key required. Set ANTHROPIC_API_KEY or pass api_key."
+            )
         self._client = httpx.AsyncClient(
             headers={
                 "x-api-key": self.api_key,

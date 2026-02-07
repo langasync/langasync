@@ -1,8 +1,8 @@
 """Pass-through adapter for chains without a model."""
 
-import os
 import uuid
 from abc import ABC, abstractmethod
+from typing import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +10,7 @@ import cloudpickle
 from langchain_core.language_models import LanguageModelInput
 
 from langasync.exceptions import provider_error_handling
+from langasync.settings import langasync_settings, LangasyncSettings
 from langasync.providers.interface import (
     ProviderJobAdapterInterface,
     ProviderJob,
@@ -53,19 +54,24 @@ class FileSystemNoModelApiPersistence(NoModelApiPersistence):
         return []
 
 
+def metadata_persistence_factory(settings: LangasyncSettings):
+    if settings.base_storage_path:
+        metadata_path = Path(settings.base_storage_path) / "no_model_metadata"
+        return FileSystemNoModelApiPersistence(metadata_path)
+    else:
+        raise NotImplementedError()
+
+
 class NoModelProviderJobAdapter(ProviderJobAdapterInterface):
-    """Pass-through adapter for chains without a model. Results are immediate.
 
-    Args:
-        persistence: Optional persistence layer. If not provided, reads
-                    LANGASYNC_STORAGE_DIR env var to create file-based persistence.
-    """
-
-    def __init__(self, persistence: NoModelApiPersistence | None = None):
-        if persistence is None:
-            storage_dir = Path(os.environ.get("LANGASYNC_STORAGE_DIR", ".langasync"))
-            persistence = FileSystemNoModelApiPersistence(storage_dir / "no_model_metadata")
-        self._persistence = persistence
+    def __init__(
+        self,
+        settings: LangasyncSettings,
+        _metadata_persistence_factory: Callable[
+            [LangasyncSettings], NoModelApiPersistence
+        ] = metadata_persistence_factory,
+    ):
+        self._persistence = _metadata_persistence_factory(settings)
 
     @provider_error_handling
     async def create_batch(

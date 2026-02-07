@@ -28,13 +28,13 @@
 **langasync** lets you use provider batch APIs (OpenAI, Anthropic) with your existing LangChain chains. Wrap your chain, submit inputs, get results at half the cost.
 
 ```python
-from langasync.core import batch_chain, FileSystemBatchJobRepository
+from langasync import batch_chain
 
 # Your existing chain — no changes needed
 chain = prompt | model | parser
 
 # Wrap for batch processing
-batch_wrapper = batch_chain(chain, FileSystemBatchJobRepository("./jobs"))
+batch_wrapper = batch_chain(chain)
 
 # Submit and retrieve results
 job = await batch_wrapper.submit(inputs)
@@ -69,7 +69,7 @@ pip install langasync
 import asyncio
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langasync.core import batch_chain, FileSystemBatchJobRepository, BatchStatus
+from langasync import batch_chain, BatchStatus
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a helpful assistant."),
@@ -78,8 +78,7 @@ prompt = ChatPromptTemplate.from_messages([
 model = ChatOpenAI(model="gpt-4o-mini")
 chain = prompt | model
 
-repository = FileSystemBatchJobRepository("./batch_jobs")
-batch_wrapper = batch_chain(chain, repository)
+batch_wrapper = batch_chain(chain)
 
 async def main():
     job = await batch_wrapper.submit([
@@ -105,7 +104,7 @@ Wrap any LangChain chain with `batch_chain()`. Prompts, models, parsers — all 
 
 ```python
 chain = prompt | model | parser
-batch_wrapper = batch_chain(chain, repository)
+batch_wrapper = batch_chain(chain)
 ```
 
 ### Structured Output
@@ -138,10 +137,10 @@ chain = prompt | model
 Batch jobs can take up to 24 hours. Jobs persist automatically — resume after process restart:
 
 ```python
-from langasync.core import BatchPoller
+from langasync import BatchPoller
 
 # Later, in a new process
-poller = BatchPoller(repository)
+poller = BatchPoller()
 
 async for result in poller.wait_all():
     print(f"Job {result.job_id}: {result.status_info.status}")
@@ -176,21 +175,40 @@ for r in result.results:
 
 | Function / Class | Description |
 |------------------|-------------|
-| `batch_chain(chain, repository)` | Wrap a LangChain chain for batch processing |
-| `BatchPoller(repository)` | Poll pending jobs and retrieve results |
-| `FileSystemBatchJobRepository(path)` | Persist jobs to local filesystem |
-| `BatchJobService` | Returned by `submit()` — provides `get_status()`, `get_results()`, `cancel()` |
+| `batch_chain(chain)` | Wrap a LangChain chain for batch processing |
+| `BatchPoller()` | Poll pending jobs and retrieve results |
+| `LangasyncSettings` | Configuration via env vars or constructor |
+| `BatchJobService` | Service layer — `create()`, `get()`, `list()` batch jobs |
+| `BatchJobHandle` | Returned by `submit()` / `create()` — provides `get_results()`, `cancel()` |
 | `BatchStatus` | Enum: `PENDING`, `IN_PROGRESS`, `COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED` |
 
 ### Configuration
 
+langasync reads configuration from environment variables or a `.env` file automatically:
+
 ```bash
-# Required
+# Provider API keys
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Optional
+# Optional overrides
 OPENAI_BASE_URL=https://api.openai.com/v1
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+LANGASYNC_BATCH_POLL_INTERVAL=60.0
+LANGASYNC_BASE_STORAGE_PATH=./langasync_jobs
+```
+
+Or configure programmatically:
+
+```python
+from langasync import LangasyncSettings, batch_chain
+
+settings = LangasyncSettings(
+    openai_api_key="sk-...",
+    batch_poll_interval=30.0,
+    base_storage_path="./my_jobs",
+)
+batch_wrapper = batch_chain(chain, settings)
 ```
 
 ### Examples

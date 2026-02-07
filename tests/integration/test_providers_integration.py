@@ -3,7 +3,7 @@
 These tests make real API calls and cost money. Run manually or in nightly CI.
 
 Usage:
-    pytest -m integration tests/integration/
+    pytest tests/integration -o "addopts="
 
 Requires API keys in environment:
     - OPENAI_API_KEY
@@ -12,15 +12,13 @@ Requires API keys in environment:
 
 import os
 import tempfile
-from pathlib import Path
 
 import pytest
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from langasync.core import FileSystemBatchJobRepository, batch_chain, BatchPoller
-from langasync.providers.interface import BatchStatus
+from langasync import batch_chain, BatchPoller, LangasyncSettings, BatchStatus
 
 
 class CountryInfo(BaseModel):
@@ -62,16 +60,16 @@ class TestOpenAIIntegration:
     async def test_batch_submit_and_poll(self, prompt, parser, openai_model):
         """Test full batch flow: submit, poll, get results."""
         with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
             chain = prompt | openai_model | parser
-            repository = FileSystemBatchJobRepository(Path(jobs_dir))
-            batch_wrapper = batch_chain(chain, repository)
+            batch_wrapper = batch_chain(chain, settings)
 
             # Submit with single input for speed/cost
-            batch_job = await batch_wrapper.submit([{"country": "France"}])
-            assert batch_job.job_id is not None
+            handle = await batch_wrapper.submit([{"country": "France"}])
+            assert handle.job_id is not None
 
             # Poll until complete
-            poller = BatchPoller(repository)
+            poller = BatchPoller(settings)
             async for result in poller.wait_all():
                 assert result.status_info.status in (
                     BatchStatus.COMPLETED,
@@ -102,16 +100,16 @@ class TestAnthropicIntegration:
     async def test_batch_submit_and_poll(self, prompt, parser, anthropic_model):
         """Test full batch flow: submit, poll, get results."""
         with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
             chain = prompt | anthropic_model | parser
-            repository = FileSystemBatchJobRepository(Path(jobs_dir))
-            batch_wrapper = batch_chain(chain, repository)
+            batch_wrapper = batch_chain(chain, settings)
 
             # Submit with single input for speed/cost
-            batch_job = await batch_wrapper.submit([{"country": "France"}])
-            assert batch_job.job_id is not None
+            handle = await batch_wrapper.submit([{"country": "France"}])
+            assert handle.job_id is not None
 
             # Poll until complete
-            poller = BatchPoller(repository)
+            poller = BatchPoller(settings)
             async for result in poller.wait_all():
                 assert result.status_info.status in (
                     BatchStatus.COMPLETED,

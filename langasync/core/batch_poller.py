@@ -2,13 +2,13 @@
 
 import asyncio
 import logging
-from typing import AsyncIterator
+from typing import AsyncIterator, Callable
 
 from langasync.providers.interface import FINISHED_STATUSES
+from langasync.settings import langasync_settings, LangasyncSettings
 
-
-from langasync.core.batch_service import BatchJobService, ProcessedResults
-from langasync.core.batch_job_repository import BatchJobRepository
+from langasync.core.batch_service import BatchJobService
+from langasync.core.batch_handle import ProcessedResults
 
 logger = logging.getLogger(__name__)
 
@@ -27,22 +27,18 @@ class BatchPoller:
                 print(f"Job {result.job_id} failed: {result.status_info.status}")
     """
 
-    def __init__(
-        self,
-        repository: BatchJobRepository,
-        poll_interval: float = 60.0,
-    ):
+    def __init__(self, settings: LangasyncSettings = langasync_settings):
         """Initialize the poller.
 
         Args:
-            repository: Repository to load pending jobs from
-            poll_interval: Seconds between status checks (default 60s)
+            settings: Settings for poll interval and storage configuration
+            repository_factory: Factory to create the repository from settings
         """
-        self.repository = repository
-        self.poll_interval = poll_interval
+        self.poll_interval = settings.batch_poll_interval
+        self.batch_job_service = BatchJobService(settings)
 
     async def _get_new_pending_services_to_watch_dict(self):
-        pending_services = await BatchJobService.list(self.repository, pending=True)
+        pending_services = await self.batch_job_service.list(pending=True)
         return {service.job_id: service for service in pending_services}
 
     async def wait_all(self, watch_for_new: bool = False) -> AsyncIterator[ProcessedResults]:

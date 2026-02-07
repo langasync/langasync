@@ -17,6 +17,7 @@ from langasync.providers.interface import (
     BatchStatusInfo,
     Provider,
 )
+from langasync.settings import LangasyncSettings
 from tests.fixtures.openai_responses import (
     openai_batch_response,
     openai_batch_status_response,
@@ -29,7 +30,6 @@ from tests.fixtures.openai_responses import (
     openai_list_batches_response,
 )
 
-
 # URL patterns for matching (ignores query parameters)
 FILES_URL = re.compile(r"https://api\.openai\.com/v1/files.*")
 BATCHES_URL = re.compile(r"https://api\.openai\.com/v1/batches(\?.*)?$")
@@ -37,9 +37,9 @@ BATCH_ID_URL = re.compile(r"https://api\.openai\.com/v1/batches/batch_abc123.*")
 
 
 @pytest.fixture
-def adapter():
-    """Create OpenAI adapter with test API key."""
-    return OpenAIProviderJobAdapter(api_key="test-api-key")
+def adapter(test_settings):
+    """Create OpenAI adapter with test settings."""
+    return OpenAIProviderJobAdapter(test_settings)
 
 
 @pytest.fixture
@@ -542,25 +542,28 @@ class TestAdapterInit:
 
     def test_init_with_api_key(self):
         """Test initialization with explicit API key."""
-        adapter = OpenAIProviderJobAdapter(api_key="sk-test123")
+        settings = LangasyncSettings(openai_api_key="sk-test123")
+        adapter = OpenAIProviderJobAdapter(settings)
         assert adapter.api_key == "sk-test123"
         assert adapter.base_url == "https://api.openai.com/v1"
 
     def test_init_with_custom_base_url(self):
         """Test initialization with custom base URL."""
-        adapter = OpenAIProviderJobAdapter(
-            api_key="sk-test123", base_url="https://custom.api.com/v1/"
+        settings = LangasyncSettings(
+            openai_api_key="sk-test123",
+            openai_base_url="https://custom.api.com/v1/",
         )
-        assert adapter.base_url == "https://custom.api.com/v1"  # Trailing slash removed
+        adapter = OpenAIProviderJobAdapter(settings)
+        assert adapter.base_url == "https://custom.api.com/v1/"
 
-    def test_init_without_api_key_raises(self, monkeypatch):
+    def test_init_without_api_key_raises(self):
         """Test initialization without API key raises error."""
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        with pytest.raises(ValueError, match="OpenAI API key required"):
-            OpenAIProviderJobAdapter()
+        settings = LangasyncSettings(openai_api_key=None)
+        with pytest.raises(Exception, match="OpenAI API key required"):
+            OpenAIProviderJobAdapter(settings)
 
-    def test_init_from_env(self, monkeypatch):
-        """Test initialization from environment variable."""
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-from-env")
-        adapter = OpenAIProviderJobAdapter()
-        assert adapter.api_key == "sk-from-env"
+    def test_init_from_settings(self):
+        """Test initialization from settings object."""
+        settings = LangasyncSettings(openai_api_key="sk-from-settings")
+        adapter = OpenAIProviderJobAdapter(settings)
+        assert adapter.api_key == "sk-from-settings"

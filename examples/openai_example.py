@@ -13,7 +13,6 @@ Requires OPENAI_API_KEY in environment or .env file.
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -27,11 +26,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from langasync.core import FileSystemBatchJobRepository, batch_chain, BatchPoller
-from langasync.providers.interface import BatchStatus
+from langasync import batch_chain, BatchPoller, LangasyncSettings, BatchStatus
 
-# Persistent storage directory
-JOBS_DIR = Path(__file__).parent / ".batch_jobs"
+settings = LangasyncSettings(base_storage_path="./examples/.batch_jobs")
 
 
 class CountryInfo(BaseModel):
@@ -57,8 +54,7 @@ async def run():
     model = ChatOpenAI(model="gpt-4o-mini")
 
     chain = prompt | model | parser
-    repository = FileSystemBatchJobRepository(JOBS_DIR)
-    batch_wrapper = batch_chain(chain, repository)
+    batch_wrapper = batch_chain(chain, settings)
 
     inputs = [
         {"country": "France"},
@@ -69,23 +65,22 @@ async def run():
     ]
 
     print(f"Submitting batch with {len(inputs)} inputs...")
-    batch_job_service = await batch_wrapper.submit(inputs)
-    print(f"Batch submitted: {batch_job_service.job_id}")
-    print(f"Jobs stored in: {JOBS_DIR}")
+    handle = await batch_wrapper.submit(inputs)
+    print(f"Batch submitted: {handle.job_id}")
+    print(f"Jobs stored in: {settings.base_storage_path}")
     print("\nRun 'python examples/openai_example.py fetch' to get results.")
 
 
 async def fetch():
     """Fetch results from pending batch jobs."""
-    repository = FileSystemBatchJobRepository(JOBS_DIR)
-    poller = BatchPoller(repository)
+    poller = BatchPoller(settings)
 
     async for result in poller.wait_all():
         status = result.status_info.status
         if status == BatchStatus.COMPLETED:
             print(f"\nJob {result.job_id} completed:")
-            for result in result.results:
-                print(result)
+            for item in result.results:
+                print(item)
         else:
             print(f"\nJob {result.job_id}: {status.value}")
 

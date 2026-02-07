@@ -15,7 +15,8 @@ from ..providers.interface import (
     Provider,
 )
 from .batch_chain import BatchChainWrapper, batch_chain
-from .batch_service import BatchJobService, ProcessedResults
+from .batch_service import BatchJobService
+from .batch_handle import BatchJobHandle, ProcessedResults
 from .batch_job_repository import BatchJob, BatchJobRepository, FileSystemBatchJobRepository
 from .batch_poller import BatchPoller
 from .get_parts_from_chain import get_parts_from_chain, ChainParts
@@ -37,6 +38,7 @@ __all__ = [
     "BatchChainWrapper",
     "batch_chain",
     "BatchJobService",
+    "BatchJobHandle",
     "BatchPoller",
     "ProcessedResults",
     "get_parts_from_chain",

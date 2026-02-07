@@ -11,12 +11,13 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 from langasync.core.batch_job_repository import BatchJob, FileSystemBatchJobRepository
+from langasync.settings import LangasyncSettings
 
 
 @pytest.fixture
-def repository(tmp_path: Path) -> FileSystemBatchJobRepository:
-    """Create a repository using a temporary directory."""
-    return FileSystemBatchJobRepository(tmp_path)
+def repository(test_settings) -> FileSystemBatchJobRepository:
+    """Create a repository using test settings."""
+    return FileSystemBatchJobRepository(test_settings)
 
 
 @pytest.fixture
@@ -40,21 +41,22 @@ class TestFileSystemBatchJobRepositoryInit:
         storage_dir = tmp_path / "nested" / "batch_jobs"
         assert not storage_dir.exists()
 
-        FileSystemBatchJobRepository(storage_dir)
+        settings = LangasyncSettings(base_storage_path=str(tmp_path / "nested"))
+        FileSystemBatchJobRepository(settings)
 
         assert storage_dir.exists()
         assert storage_dir.is_dir()
 
-    def test_accepts_existing_directory(self, tmp_path: Path):
-        """Repository works with an existing directory."""
-        tmp_path.mkdir(parents=True, exist_ok=True)
-        repo = FileSystemBatchJobRepository(tmp_path)
-        assert repo.storage_dir == tmp_path
+    def test_storage_dir_uses_base_path(self, test_settings):
+        """Repository storage_dir is base_storage_path / batch_jobs."""
+        repo = FileSystemBatchJobRepository(test_settings)
+        assert repo.storage_dir == Path(test_settings.base_storage_path) / "batch_jobs"
 
-    def test_accepts_string_path(self, tmp_path: Path):
-        """Repository accepts string path and converts to Path."""
-        repo = FileSystemBatchJobRepository(str(tmp_path))
-        assert isinstance(repo.storage_dir, Path)
+    def test_accepts_existing_directory(self, test_settings):
+        """Repository works with an existing directory."""
+        FileSystemBatchJobRepository(test_settings)
+        repo = FileSystemBatchJobRepository(test_settings)
+        assert repo.storage_dir.exists()
 
 
 class TestSave:
@@ -148,7 +150,7 @@ class TestGet:
 
     @pytest.mark.asyncio
     async def test_get_handles_missing_optional_fields(
-        self, repository: FileSystemBatchJobRepository, tmp_path: Path
+        self, repository: FileSystemBatchJobRepository
     ):
         """Jobs saved without optional fields get default values."""
         # Serialize the chain using cloudpickle
@@ -157,7 +159,7 @@ class TestGet:
         chain_b64 = base64.b64encode(chain_bytes).decode("utf-8")
 
         # Manually create a minimal JSON file without optional fields
-        job_file = tmp_path / "minimal-job.json"
+        job_file = repository.storage_dir / "minimal-job.json"
         job_file.write_text(
             json.dumps(
                 {

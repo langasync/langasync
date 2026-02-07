@@ -68,7 +68,8 @@ Thumbs.db
 # Plans
 plans/
 
-# Example batch job storage
+# Batch job storage (default + examples)
+langasync_jobs/
 .batch_jobs/
 
 # Environment files
