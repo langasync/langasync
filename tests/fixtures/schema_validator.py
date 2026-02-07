@@ -1,0 +1,84 @@
+"""Schema validation using official SDK Pydantic models.
+
+Validates factory outputs against the SDK's Pydantic models. When providers
+update their SDKs, validation will fail automatically if our factories
+produce incompatible structures.
+
+Usage:
+    from tests.fixtures.schema_validator import validate_openai_batch, validate_anthropic_batch
+
+    # Validates by constructing SDK model - fails if schema mismatches
+    validate_openai_batch(openai_batch_response(...))
+    validate_anthropic_batch(anthropic_batch_response(...))
+"""
+
+from typing import Any
+
+from openai.types import Batch as OpenAIBatch, FileObject as OpenAIFile, BatchError, ErrorObject
+from openai.types.chat import ChatCompletion as OpenAIChatCompletion
+from anthropic.types.messages import (
+    MessageBatch as AnthropicBatch,
+    MessageBatchIndividualResponse as AnthropicResultLine,
+)
+
+
+class SchemaValidationError(Exception):
+    """Raised when a response doesn't match the SDK schema."""
+
+    pass
+
+
+def validate_openai_batch(response: dict[str, Any]) -> OpenAIBatch:
+    """Validate response against OpenAI Batch model."""
+    try:
+        return OpenAIBatch.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"OpenAI Batch validation failed: {e}") from e
+
+
+def validate_openai_file(response: dict[str, Any]) -> OpenAIFile:
+    """Validate response against OpenAI FileObject model."""
+    try:
+        return OpenAIFile.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"OpenAI FileObject validation failed: {e}") from e
+
+
+def validate_openai_chat_completion(response: dict[str, Any]) -> OpenAIChatCompletion:
+    """Validate response against OpenAI ChatCompletion model."""
+    try:
+        return OpenAIChatCompletion.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"OpenAI ChatCompletion validation failed: {e}") from e
+
+
+def validate_openai_batch_error(response: dict[str, Any]) -> BatchError:
+    """Validate response against OpenAI BatchError model."""
+    try:
+        return BatchError.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"OpenAI BatchError validation failed: {e}") from e
+
+
+def validate_openai_error_object(response: dict[str, Any]) -> ErrorObject:
+    """Validate response against OpenAI ErrorObject model."""
+    try:
+        return ErrorObject.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"OpenAI ErrorObject validation failed: {e}") from e
+
+
+def validate_anthropic_batch(response: dict[str, Any]) -> AnthropicBatch:
+    """Validate response against Anthropic MessageBatch model."""
+    try:
+        return AnthropicBatch.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Anthropic MessageBatch validation failed: {e}") from e
+
+
+def validate_anthropic_result_line(response: dict[str, Any]) -> AnthropicResultLine:
+    """Validate response against Anthropic MessageBatchIndividualResponse model."""
+    try:
+        return AnthropicResultLine.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Anthropic result line validation failed: {e}") from e
