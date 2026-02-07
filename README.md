@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://pypi.org/project/langasync/"><img alt="PyPI" src="https://img.shields.io/pypi/v/langasync?color=blue"></a>
   <a href="https://pypi.org/project/langasync/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/langasync"></a>
-  <a href="https://github.com/langasync/langasync/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-BSL--1.1-blue"></a>
+  <a href="https://github.com/langasync/langasync/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-BSL--1.1-blue"></a>
   <a href="https://github.com/langasync/langasync/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/langasync/langasync/actions/workflows/test.yml/badge.svg"></a>
 </p>
 
@@ -238,7 +238,7 @@ Contributions are welcome!
 ## Community
 
 - [GitHub Issues](https://github.com/langasync/langasync/issues) — Bug reports and feature requests
-- [GitHub Discussions](https://github.com/langasync/langasync/discussions) — Questions and ideas
+- [GitHub Discussions](https://github.com/orgs/langasync/discussions) — Questions and ideas
 
 ## License
 
