@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/256Bab/langasync">
+  <a href="https://github.com/langasync/langasync">
     <img alt="langasync" src="langasync.png" width="400">
   </a>
 </p>
@@ -11,8 +11,8 @@
 <p align="center">
   <a href="https://pypi.org/project/langasync/"><img alt="PyPI" src="https://img.shields.io/pypi/v/langasync?color=blue"></a>
   <a href="https://pypi.org/project/langasync/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/langasync"></a>
-  <a href="https://github.com/256Bab/langasync/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-BSL--1.1-blue"></a>
-  <a href="https://github.com/256Bab/langasync/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/256Bab/langasync/actions/workflows/test.yml/badge.svg"></a>
+  <a href="https://github.com/langasync/langasync/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-BSL--1.1-blue"></a>
+  <a href="https://github.com/langasync/langasync/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/langasync/langasync/actions/workflows/test.yml/badge.svg"></a>
 </p>
 
 <p align="center">
@@ -210,7 +210,7 @@ python examples/openai_example.py fetch
 ### Setup
 
 ```bash
-git clone https://github.com/256Bab/langasync.git
+git clone https://github.com/langasync/langasync.git
 cd langasync
 pip install -e ".[dev]"
 ```
@@ -237,8 +237,8 @@ Contributions are welcome!
 
 ## Community
 
-- [GitHub Issues](https://github.com/256Bab/langasync/issues) — Bug reports and feature requests
-- [GitHub Discussions](https://github.com/256Bab/langasync/discussions) — Questions and ideas
+- [GitHub Issues](https://github.com/langasync/langasync/issues) — Bug reports and feature requests
+- [GitHub Discussions](https://github.com/langasync/langasync/discussions) — Questions and ideas
 
 ## License
 
