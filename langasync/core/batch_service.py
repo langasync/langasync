@@ -51,7 +51,7 @@ class BatchJobService:
             raise FailedPreProcessingError(str(e))
 
         batch_api_job = await batch_api_adapter.create_batch(
-            preprocessed_inputs, model, model_bindings
+            preprocessed_inputs, model, model_bindings  # type: ignore[arg-type]
         )
 
         batch_job = BatchJob(

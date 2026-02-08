@@ -7,14 +7,14 @@ name = "langasync"
 version = "0.1.0"
 description = "Async API integration library for multiple providers"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "langchain-core>=0.1.0",
-    "cloudpickle>=3.0",
-    "httpx>=0.25.0",
-    "langchain-anthropic>=0.1.0"
+    "pydantic>=2.0,<3.0",
+    "pydantic-settings>=2.0,<3.0",
+    "langchain-core>=1.0,<2.0",
+    "cloudpickle>=3.0,<4.0",
+    "httpx>=0.25.0,<1.0",
+    "langchain-anthropic>=1.0,<2.0"
 ]
 
 [tool.setuptools.packages.find]
@@ -30,9 +30,10 @@ dev = [
     "python-dotenv>=1.0",
     "black>=23.0",
     "ruff>=0.1",
-    "langchain-openai>=0.1.0",
-    "openai>=1.0",
-    "anthropic>=0.20",
+    "langchain-openai>=1.0,<2.0",
+    "openai>=2.0,<3.0",
+    "anthropic>=0.20,<1.0",
+    "mypy>=1.0",
 ]
 
 [tool.pytest.ini_options]
@@ -46,10 +47,16 @@ markers = [
 
 [tool.black]
 line-length = 100
-target-version = ["py38"]
+target-version = ["py311"]
 exclude = ".venv"
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py311"
 exclude = [".venv"]
+
+[tool.mypy]
+ignore_missing_imports = false
+disallow_untyped_defs = true
+exclude = [".venv"]
+

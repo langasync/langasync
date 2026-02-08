@@ -41,7 +41,7 @@ def custom_convert_to_anthropic_messages(inp: LanguageModelInput):
         inp = [inp]
 
     # Use LangChain's _format_messages to convert
-    system, messages = _format_messages(inp)
+    system, messages = _format_messages(inp)  # type: ignore[arg-type]
     return system, messages
 
 

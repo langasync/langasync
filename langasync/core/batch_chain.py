@@ -18,7 +18,9 @@ class BatchChainWrapper:
         self.postprocessing_chain = parts.postprocessing
         self.batch_job_service = BatchJobService(settings)
 
-    async def submit(self, inputs) -> BatchJobHandle:
+    async def submit(self, inputs: list) -> BatchJobHandle:
+        if not inputs:
+            raise ValueError("inputs must be a non-empty list")
         return await self.batch_job_service.create(
             inputs,
             self.model,

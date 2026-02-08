@@ -157,7 +157,7 @@ await batch_wrapper.submit([
 
 ### Job Persistence
 
-Batch jobs can take up to 24 hours. Jobs persist automatically — resume after process restart:
+Batch jobs can take up to 24 hours. Job metadata persists automatically — resume after process restart:
 
 ```python
 from langasync import BatchPoller
@@ -168,6 +168,8 @@ poller = BatchPoller()
 async for result in poller.wait_all():
     print(f"Job {result.job_id}: {result.status_info.status}")
 ```
+
+> **Note:** langasync persists job metadata (IDs, status) but not results. Save your results when you receive them — providers delete batch outputs after ~30 days.
 
 ### Partial Failure Handling
 

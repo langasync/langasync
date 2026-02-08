@@ -6,7 +6,7 @@ from typing import Callable
 from datetime import datetime
 from pathlib import Path
 
-import cloudpickle
+import cloudpickle  # type: ignore[import-untyped]
 from langchain_core.language_models import LanguageModelInput
 
 from langasync.exceptions import provider_error_handling

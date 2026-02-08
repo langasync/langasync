@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import cloudpickle
+import cloudpickle  # type: ignore[import-untyped]
 from langchain_core.runnables import Runnable
 
 from langasync.settings import LangasyncSettings

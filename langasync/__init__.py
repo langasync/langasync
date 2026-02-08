@@ -9,3 +9,13 @@ from langasync.core.batch_service import BatchJobService
 from langasync.core.batch_handle import BatchJobHandle, ProcessedResults
 from langasync.core.batch_job_repository import FileSystemBatchJobRepository, BatchJobRepository
 from langasync.providers.interface import BatchStatus
+
+__all__ = [
+    "batch_chain",
+    "BatchPoller",
+    "BatchJobService",
+    "BatchStatus",
+    "LangasyncSettings",
+    "langasync_settings",
+    "ProcessedResults",
+]

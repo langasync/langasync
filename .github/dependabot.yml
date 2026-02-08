@@ -13,3 +13,5 @@ updates:
       - dependency-name: "langchain-anthropic"
       - dependency-name: "langchain-core"
       - dependency-name: "langchain-openai"
+      - dependency-name: "openai"
+      - dependency-name: "anthropic"

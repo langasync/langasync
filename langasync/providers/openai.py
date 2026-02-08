@@ -28,7 +28,7 @@ from langasync.providers.interface import (
 
 def _to_openai_messages(inp: LanguageModelInput) -> list[dict]:
     """Convert LanguageModelInput to OpenAI messages format."""
-    result = convert_to_openai_messages(inp)
+    result = convert_to_openai_messages(inp)  # type: ignore[arg-type]
     return result if isinstance(result, list) else [result]
 
 
