@@ -285,4 +285,4 @@ Contributions are welcome!
 
 ## License
 
-langasync is licensed under the [Business Source License 1.1](LICENSE). You can use it freely for any purpose, including commercial and production use, as long as you don't offer it as a competing hosted service. On February 6, 2030, the license converts to Apache 2.0.
+langasync is free to use for any purpose — personal projects, commercial products, production workloads, whatever you need. The only thing you can't do is take it and offer it as a competing batch-processing service. The full license is [BSL 1.1](LICENSE), which converts to Apache 2.0 on February 6, 2030.
