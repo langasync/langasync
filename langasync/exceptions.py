@@ -59,6 +59,12 @@ class UnsupportedChainError(LangAsyncError):
     pass
 
 
+class PollerMaxRetriesError(LangAsyncError):
+    """Exception raised when the poller exceeds the maximum number of consecutive poll errors."""
+
+    pass
+
+
 class UnsupportedProviderError(LangAsyncError):
     """Exception raised when a provider is not supported or not recognized."""
 

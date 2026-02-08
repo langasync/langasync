@@ -19,6 +19,7 @@ from langasync.providers.interface import (
 )
 from langasync.providers import Provider
 from langasync.providers.none import NoModelProviderJobAdapter
+from langasync.exceptions import LangAsyncError
 from langasync.settings import LangasyncSettings
 
 
@@ -31,6 +32,28 @@ class FailingProviderJobAdapter(NoModelProviderJobAdapter):
     async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         # Return empty results for failed job
         return []
+
+
+class TransientErrorAdapter(NoModelProviderJobAdapter):
+    """Adapter that raises exceptions for the first N calls, then succeeds."""
+
+    def __init__(self, settings: LangasyncSettings, errors_before_success: int = 2):
+        super().__init__(settings)
+        self.call_count = 0
+        self.errors_before_success = errors_before_success
+
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
+        self.call_count += 1
+        if self.call_count <= self.errors_before_success:
+            raise ConnectionError(f"Transient error {self.call_count}")
+        return await super().get_status(batch_api_job)
+
+
+class AlwaysErrorAdapter(NoModelProviderJobAdapter):
+    """Adapter that always raises exceptions."""
+
+    async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
+        raise ConnectionError("Persistent error")
 
 
 class DelayedCompletionAdapter(NoModelProviderJobAdapter):
@@ -366,9 +389,9 @@ class TestBatchPollerDelayedCompletion:
         # Create adapter instance with shared state we can inspect
         adapter = DelayedCompletionAdapter(fast_poll_settings, calls_until_complete=3)
 
-        with patch(
-            "langasync.core.batch_service.get_adapter_from_provider",
-            return_value=adapter,
+        with patch.dict(
+            "langasync.providers.ADAPTER_REGISTRY",
+            {Provider.NONE: lambda settings: adapter},
         ):
             poller = BatchPoller(fast_poll_settings)
             results = [r async for r in poller.wait_all()]
@@ -379,3 +402,54 @@ class TestBatchPollerDelayedCompletion:
         assert len(adapter.call_counts) == 1
         job_id = list(adapter.call_counts.keys())[0]
         assert adapter.call_counts[job_id] >= 3
+
+
+class TestBatchPollerRetryBehavior:
+    """Tests for BatchPoller retry/error handling."""
+
+    @pytest.mark.asyncio
+    async def test_poller_recovers_from_transient_errors(
+        self, batch_job_service, fast_poll_settings
+    ):
+        """Poller continues polling after 2 consecutive errors and still yields results."""
+        chain = RunnablePassthrough()
+        await batch_job_service.create(
+            inputs=["test"],
+            model=None,
+            preprocessing_chain=chain,
+            postprocessing_chain=chain,
+        )
+
+        adapter = TransientErrorAdapter(fast_poll_settings, errors_before_success=2)
+
+        with patch.dict(
+            "langasync.providers.ADAPTER_REGISTRY",
+            {Provider.NONE: lambda settings: adapter},
+        ):
+            poller = BatchPoller(fast_poll_settings)
+            results = [r async for r in poller.wait_all()]
+
+        assert len(results) == 1
+        assert results[0].status_info.status == BatchStatus.COMPLETED
+        assert adapter.call_count > 2
+
+    @pytest.mark.asyncio
+    async def test_poller_raises_after_max_consecutive_errors(
+        self, batch_job_service, fast_poll_settings
+    ):
+        """Poller raises PollerMaxRetriesError after 5 consecutive errors."""
+        chain = RunnablePassthrough()
+        await batch_job_service.create(
+            inputs=["test"],
+            model=None,
+            preprocessing_chain=chain,
+            postprocessing_chain=chain,
+        )
+
+        with patch.dict(
+            "langasync.providers.ADAPTER_REGISTRY",
+            {Provider.NONE: lambda settings: AlwaysErrorAdapter(settings)},
+        ):
+            poller = BatchPoller(fast_poll_settings)
+            with pytest.raises(LangAsyncError):
+                _ = [r async for r in poller.wait_all()]

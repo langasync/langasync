@@ -36,6 +36,9 @@ jobs:
         run: pytest tests -v
 
   integration:
+    concurrency:
+      group: integration-tests
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
 
