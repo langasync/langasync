@@ -56,7 +56,8 @@ class BatchJobHandle:
     async def _postprocess(self, results: list[BatchItem]) -> list[Any]:
         """Run the postprocessing chain on batch results."""
 
-        async def _process_example_if_successful(response: BatchItem):
+        # Returns errors instead of raising to support partial batch completions
+        async def _process_example_if_successful(response: BatchItem) -> Any:
             if response.success:
                 try:
                     return await self.postprocessing_chain.ainvoke(response.content)
@@ -68,7 +69,7 @@ class BatchJobHandle:
         outputs = await asyncio.gather(*[_process_example_if_successful(r) for r in results])
         return outputs
 
-    async def _mark_as_finished(self, status_info: BatchStatusInfo):
+    async def _mark_as_finished(self, status_info: BatchStatusInfo) -> None:
         batch_job = await self.repository.get(self.batch_api_job.id)
         if batch_job is None:
             return
@@ -79,7 +80,7 @@ class BatchJobHandle:
         await self.repository.save(batch_job)
 
     @error_handling
-    async def get_results(self):
+    async def get_results(self) -> ProcessedResults:
         batch_status_info = await self.batch_api_adapter.get_status(self.batch_api_job)
         if batch_status_info.status == BatchStatus.COMPLETED:
             results = await self.batch_api_adapter.get_results(self.batch_api_job)
@@ -102,7 +103,7 @@ class BatchJobHandle:
             )
 
     @error_handling
-    async def cancel(self):
+    async def cancel(self) -> bool:
         batch_status_info = await self.batch_api_adapter.cancel(self.batch_api_job)
         await self._mark_as_finished(batch_status_info)
         return True

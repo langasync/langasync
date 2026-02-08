@@ -8,7 +8,7 @@ from langasync.providers.interface import FINISHED_STATUSES
 from langasync.settings import langasync_settings, LangasyncSettings
 
 from langasync.core.batch_service import BatchJobService
-from langasync.core.batch_handle import ProcessedResults
+from langasync.core.batch_handle import BatchJobHandle, ProcessedResults
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class BatchPoller:
         self.poll_interval = settings.batch_poll_interval
         self.batch_job_service = BatchJobService(settings)
 
-    async def _get_new_pending_services_to_watch_dict(self):
+    async def _get_new_pending_services_to_watch_dict(self) -> dict[str, BatchJobHandle]:
         pending_services = await self.batch_job_service.list(pending=True)
         return {service.job_id: service for service in pending_services}
 

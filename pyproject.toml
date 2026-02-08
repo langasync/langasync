@@ -56,7 +56,8 @@ target-version = "py311"
 exclude = [".venv"]
 
 [tool.mypy]
+packages = ["langasync"]
 ignore_missing_imports = false
 disallow_untyped_defs = true
-exclude = [".venv"]
+exclude = [".venv", "examples", "tests"]
 

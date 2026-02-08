@@ -1,3 +1,5 @@
+from langchain_core.runnables import Runnable
+
 from langasync.core.batch_service import BatchJobService
 from langasync.core.batch_handle import BatchJobHandle
 from langasync.core.get_parts_from_chain import get_parts_from_chain
@@ -7,9 +9,9 @@ from langasync.settings import LangasyncSettings, langasync_settings
 class BatchChainWrapper:
     def __init__(
         self,
-        chain,
+        chain: Runnable,
         settings: LangasyncSettings,
-    ):
+    ) -> None:
         parts = get_parts_from_chain(chain)
 
         self.model = parts.model
@@ -30,5 +32,7 @@ class BatchChainWrapper:
         )
 
 
-def batch_chain(chain, settings: LangasyncSettings = langasync_settings) -> BatchChainWrapper:
+def batch_chain(
+    chain: Runnable, settings: LangasyncSettings = langasync_settings
+) -> BatchChainWrapper:
     return BatchChainWrapper(chain, settings)

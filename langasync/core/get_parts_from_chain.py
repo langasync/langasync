@@ -130,7 +130,7 @@ def _steps_to_runnable(steps: list[Runnable]) -> Runnable:
 
 
 def _unwrap_to_model(
-    runnable, bindings: dict | None = None
+    runnable: Runnable, bindings: dict | None = None
 ) -> tuple[BaseLanguageModel | None, dict]:
     """Unwrap a runnable to get the underlying BaseLanguageModel and accumulated bindings.
 
@@ -162,7 +162,7 @@ def _unwrap_to_model(
     return None, bindings
 
 
-def _is_retriever(runnable) -> bool:
+def _is_retriever(runnable: Runnable) -> bool:
     """Check if a runnable is a retriever.
 
     Args:
@@ -182,7 +182,7 @@ def _is_retriever(runnable) -> bool:
     return False
 
 
-def _is_branching_runnable(runnable) -> bool:
+def _is_branching_runnable(runnable: Runnable) -> bool:
     """Check if a runnable is a RunnableBranch.
 
     Args:
@@ -200,7 +200,7 @@ def _is_branching_runnable(runnable) -> bool:
     return False
 
 
-def _is_each_runnable(runnable) -> bool:
+def _is_each_runnable(runnable: Runnable) -> bool:
     """Check if a runnable is a RunnableEach.
 
     Args:
@@ -218,7 +218,7 @@ def _is_each_runnable(runnable) -> bool:
     return False
 
 
-def _find_hidden_models(runnable) -> list[BaseLanguageModel]:
+def _find_hidden_models(runnable: Runnable) -> list[BaseLanguageModel]:
     """Recursively find models hidden inside container runnables.
 
     Inspects inside RunnableParallel, RunnableAssign, and similar containers

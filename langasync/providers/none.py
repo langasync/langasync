@@ -54,7 +54,7 @@ class FileSystemNoModelApiPersistence(NoModelApiPersistence):
         return []
 
 
-def metadata_persistence_factory(settings: LangasyncSettings):
+def metadata_persistence_factory(settings: LangasyncSettings) -> NoModelApiPersistence:
     if settings.base_storage_path:
         metadata_path = Path(settings.base_storage_path) / "no_model_metadata"
         return FileSystemNoModelApiPersistence(metadata_path)

@@ -1,4 +1,5 @@
 import functools
+from typing import Any, Callable, Coroutine
 
 
 class LangAsyncError(Exception):
@@ -61,9 +62,12 @@ class UnsupportedProviderError(LangAsyncError):
     pass
 
 
-def error_handling(fn, default_exception_class=LangAsyncError):
+def error_handling(
+    fn: Callable[..., Coroutine[Any, Any, Any]],
+    default_exception_class: type[LangAsyncError] = LangAsyncError,
+) -> Callable[..., Coroutine[Any, Any, Any]]:
     @functools.wraps(fn)
-    async def wrapper(*args, **kwargs):
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return await fn(*args, **kwargs)
         except LangAsyncError:
@@ -74,5 +78,7 @@ def error_handling(fn, default_exception_class=LangAsyncError):
     return wrapper
 
 
-def provider_error_handling(fn):
+def provider_error_handling(
+    fn: Callable[..., Coroutine[Any, Any, Any]],
+) -> Callable[..., Coroutine[Any, Any, Any]]:
     return error_handling(fn, default_exception_class=BatchProviderApiError)

@@ -142,7 +142,7 @@ class FileSystemBatchJobRepository(BatchJobRepository):
             path.unlink()
 
 
-def batch_job_repository_factory(settings: LangasyncSettings):
+def batch_job_repository_factory(settings: LangasyncSettings) -> BatchJobRepository:
     if settings.base_storage_path:
         return FileSystemBatchJobRepository(settings)
     else:

@@ -27,7 +27,9 @@ from langasync.providers.interface import (
 )
 
 
-def custom_convert_to_anthropic_messages(inp: LanguageModelInput):
+def custom_convert_to_anthropic_messages(
+    inp: LanguageModelInput,
+) -> tuple[str | list[dict] | None, list[dict]]:
     # Handle PromptValue (from prompt templates)
     if isinstance(inp, PromptValue):
         inp = inp.to_messages()
