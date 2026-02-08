@@ -11,15 +11,11 @@ Requires ANTHROPIC_API_KEY in environment or .env file.
 """
 
 import asyncio
-import logging
 import sys
 
 from dotenv import load_dotenv
 
 load_dotenv()
-
-logging.getLogger("langasync").setLevel(logging.INFO)
-logging.getLogger("langasync").addHandler(logging.StreamHandler())
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.output_parsers import PydanticOutputParser

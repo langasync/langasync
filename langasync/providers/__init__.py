@@ -1,5 +1,6 @@
 """Provider implementations for various third-party APIs."""
 
+from pydantic import SecretStr
 from langchain_core.language_models import BaseLanguageModel
 
 from langasync.exceptions import UnsupportedProviderError
@@ -18,6 +19,41 @@ ADAPTER_REGISTRY: dict[Provider, Callable[[LangasyncSettings], ProviderJobAdapte
 }
 
 
+def _extract_secret(value: SecretStr | str | None) -> str | None:
+    """Extract a string from a SecretStr or plain string."""
+    if value is None:
+        return None
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    return value
+
+
+def _get_provider_and_update_settings_from_model(
+    model: BaseLanguageModel | None, settings: LangasyncSettings
+) -> Provider:
+    """Detect the provider from a model instance and extract API key if missing from settings."""
+    if model is None:
+        return Provider.NONE
+
+    lc_id = model.lc_id()
+    lc_path = ".".join(lc_id).lower()
+
+    if "openai" in lc_path:
+        if settings.openai_api_key is None:
+            key = _extract_secret(getattr(model, "openai_api_key", None))
+            if key:
+                settings.openai_api_key = key
+        return Provider.OPENAI
+    elif "anthropic" in lc_path:
+        if settings.anthropic_api_key is None:
+            key = _extract_secret(getattr(model, "anthropic_api_key", None))
+            if key:
+                settings.anthropic_api_key = key
+        return Provider.ANTHROPIC
+
+    raise UnsupportedProviderError(f"Cannot detect provider for model: {lc_id}")
+
+
 def get_adapter_from_provider(
     provider: Provider, settings: LangasyncSettings
 ) -> ProviderJobAdapterInterface:
@@ -28,25 +64,9 @@ def get_adapter_from_provider(
     return adapter_constructor(settings)
 
 
-def get_provider_from_model(model: BaseLanguageModel | None) -> Provider:
-    """Detect the provider from a model instance using LangChain's lc_id."""
-    if model is None:
-        return Provider.NONE
-
-    lc_id = model.lc_id()
-    lc_path = ".".join(lc_id).lower()
-
-    if "openai" in lc_path:
-        return Provider.OPENAI
-    elif "anthropic" in lc_path:
-        return Provider.ANTHROPIC
-
-    raise UnsupportedProviderError(f"Cannot detect provider for model: {lc_id}")
-
-
 def get_adapter_from_model(
     model: BaseLanguageModel | None, settings: LangasyncSettings
 ) -> ProviderJobAdapterInterface:
     """Get the appropriate batch API adapter for a model."""
-    provider = get_provider_from_model(model)
+    provider = _get_provider_and_update_settings_from_model(model, settings)
     return get_adapter_from_provider(provider, settings)

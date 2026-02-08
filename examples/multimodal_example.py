@@ -14,7 +14,6 @@ Requires OPENAI_API_KEY or ANTHROPIC_API_KEY in environment or .env file.
 
 import asyncio
 import base64
-import logging
 import sys
 
 import httpx
@@ -26,9 +25,6 @@ from langchain_openai import ChatOpenAI
 from langasync import batch_chain, BatchPoller, LangasyncSettings, BatchStatus
 
 load_dotenv()
-
-logging.getLogger("langasync").setLevel(logging.INFO)
-logging.getLogger("langasync").addHandler(logging.StreamHandler())
 
 settings = LangasyncSettings(base_storage_path="./examples/.batch_jobs")
 
