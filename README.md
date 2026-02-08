@@ -63,6 +63,14 @@ langasync abstracts all of that:
 pip install langasync
 ```
 
+### Set your API key
+
+```bash
+export OPENAI_API_KEY=sk-...
+# or for Anthropic:
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
 ### Basic Usage
 
 ```python

@@ -1,6 +1,8 @@
 """langasync - Async API integration library for multiple providers."""
 
-__version__ = "0.1.0"
+from importlib.metadata import version
+
+__version__ = version("langasync")
 
 from langasync.settings import LangasyncSettings, langasync_settings
 from langasync.core.batch_chain import BatchChainWrapper, batch_chain

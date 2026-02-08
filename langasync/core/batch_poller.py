@@ -37,6 +37,10 @@ class BatchPoller:
         self.poll_interval = settings.batch_poll_interval
         self.batch_job_service = BatchJobService(settings)
 
+        if not logger.handlers:
+            logger.setLevel(logging.INFO)
+            logger.addHandler(logging.StreamHandler())
+
     async def _get_new_pending_services_to_watch_dict(self) -> dict[str, BatchJobHandle]:
         pending_services = await self.batch_job_service.list(pending=True)
         return {service.job_id: service for service in pending_services}
