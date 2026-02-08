@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from langchain_core.language_models import BaseLanguageModel
@@ -9,6 +10,8 @@ from langasync.exceptions import (
     error_handling,
     FailedPreProcessingError,
 )
+
+logger = logging.getLogger(__name__)
 
 from langasync.providers.interface import ProviderJob
 from langasync.core.batch_handle import BatchJobHandle
@@ -45,6 +48,7 @@ class BatchJobService:
             model_bindings = {}
 
         batch_api_adapter = get_adapter_from_model(model, self.settings)
+        logger.debug(f"Preprocessing {len(inputs)} inputs")
         try:
             preprocessed_inputs = await preprocessing_chain.abatch(inputs)
         except Exception as e:
@@ -52,6 +56,9 @@ class BatchJobService:
 
         batch_api_job = await batch_api_adapter.create_batch(
             preprocessed_inputs, model, model_bindings  # type: ignore[arg-type]
+        )
+        logger.info(
+            f"Batch job created: {batch_api_job.id} (provider={batch_api_job.provider.value})"
         )
 
         batch_job = BatchJob(
@@ -110,6 +117,7 @@ class BatchJobService:
         Returns:
             List of BatchJobService instances
         """
+        logger.info(f"Listing batch jobs (pending={pending})")
         batch_jobs = await self.repository.list(pending=pending)
         handles = []
         for batch_job in batch_jobs:

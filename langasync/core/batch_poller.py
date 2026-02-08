@@ -74,6 +74,7 @@ class BatchPoller:
                     completed.append((job_id, result))
 
             for job_id, result in completed:
+                logger.info(f"Job {job_id}: {result.status_info.status.value}")
                 # clear up space for memory
                 del services_to_watch[job_id]
                 yield result

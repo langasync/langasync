@@ -21,6 +21,9 @@ dependencies = [
 include = ["langasync*"]
 exclude = ["plans*"]
 
+[tool.setuptools.package-data]
+langasync = ["py.typed"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",

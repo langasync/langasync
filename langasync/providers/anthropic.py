@@ -2,10 +2,13 @@
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 from langchain_anthropic.chat_models import _format_messages
 from langchain_anthropic.output_parsers import extract_tool_calls
 from langchain_core.language_models import LanguageModelInput
@@ -153,6 +156,7 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
         requests = [
             _to_anthropic_request(inp, model_config, str(i)) for i, inp in enumerate(inputs)
         ]
+        logger.debug(f"Submitting {len(inputs)} requests to Anthropic Message Batches API")
 
         response = await self._client.post(
             f"{self.base_url}/v1/messages/batches",
@@ -161,6 +165,7 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
         response.raise_for_status()
         batch_data = response.json()
 
+        logger.info(f"Anthropic batch created: {batch_data['id']}")
         return ProviderJob(
             id=batch_data["id"],
             provider=Provider.ANTHROPIC,
@@ -184,6 +189,7 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
         total = processing + succeeded + errored + canceled + expired
         completed = succeeded
         failed = errored + canceled + expired
+        logger.info(f"Anthropic batch {batch_api_job.id}: status={data['processing_status']}")
 
         return BatchStatusInfo(
             status=_map_anthropic_status(data["processing_status"], request_counts),
@@ -258,6 +264,7 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
     @provider_error_handling
     async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         """Get results from a completed batch job."""
+        logger.debug(f"Downloading results for batch {batch_api_job.id}")
         # First get batch info to get results_url
         response = await self._client.get(f"{self.base_url}/v1/messages/batches/{batch_api_job.id}")
         response.raise_for_status()

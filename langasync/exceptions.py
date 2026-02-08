@@ -1,5 +1,8 @@
 import functools
+import logging
 from typing import Any, Callable, Coroutine
+
+logger = logging.getLogger(__name__)
 
 
 class LangAsyncError(Exception):
@@ -73,6 +76,7 @@ def error_handling(
         except LangAsyncError:
             raise
         except Exception as e:
+            logger.error(f"Unexpected error in {fn.__qualname__}: {e}")
             raise default_exception_class(str(e)) from e
 
     return wrapper

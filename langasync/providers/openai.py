@@ -2,12 +2,15 @@
 
 import asyncio
 import json
+import logging
 import os
 import tempfile
 from datetime import datetime
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 from langchain_core.language_models import BaseLanguageModel, LanguageModelInput
 from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.messages.utils import convert_to_openai_messages
@@ -154,6 +157,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
             lines.append(json.dumps(request))
 
         jsonl_content = "\n".join(lines)
+        logger.debug(f"Uploading JSONL file ({len(inputs)} requests)")
 
         # Upload file
         file_id = await self._upload_batch_file(jsonl_content)
@@ -170,6 +174,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         response.raise_for_status()
         batch_data = response.json()
 
+        logger.info(f"OpenAI batch created: {batch_data['id']}")
         return ProviderJob(
             id=batch_data["id"],
             provider=Provider.OPENAI,
@@ -185,6 +190,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         data = response.json()
 
         request_counts = data.get("request_counts", {})
+        logger.info(f"OpenAI batch {batch_api_job.id}: status={data['status']}")
 
         return BatchStatusInfo(
             status=_map_openai_status(data["status"]),
@@ -249,6 +255,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
     @provider_error_handling
     async def get_results(self, batch_api_job: ProviderJob) -> list[BatchItem]:
         """Get results from a completed batch job."""
+        logger.debug(f"Downloading results for batch {batch_api_job.id}")
         response = await self._client.get(f"{self.base_url}/batches/{batch_api_job.id}")
         response.raise_for_status()
         batch_data = response.json()

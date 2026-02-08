@@ -1,9 +1,12 @@
 from __future__ import annotations
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.runnables import Runnable
+
+logger = logging.getLogger(__name__)
 
 from langasync.exceptions import (
     error_handling,
@@ -62,6 +65,9 @@ class BatchJobHandle:
                 try:
                     return await self.postprocessing_chain.ainvoke(response.content)
                 except Exception as e:
+                    logger.error(
+                        f"Job {self.batch_api_job.id}: postprocessing failed for item: {e}"
+                    )
                     return FailedPostProcessingError(str(e))
             else:
                 return FailedLLMOutputError(str(response.error))
@@ -72,6 +78,7 @@ class BatchJobHandle:
     async def _mark_as_finished(self, status_info: BatchStatusInfo) -> None:
         batch_job = await self.repository.get(self.batch_api_job.id)
         if batch_job is None:
+            logger.warning(f"Job {self.batch_api_job.id}: not found in repository")
             return
         batch_job.finished = True
         batch_job.status = status_info.status
@@ -82,10 +89,14 @@ class BatchJobHandle:
     @error_handling
     async def get_results(self) -> ProcessedResults:
         batch_status_info = await self.batch_api_adapter.get_status(self.batch_api_job)
+        logger.info(f"Job {self.batch_api_job.id}: status={batch_status_info.status.value}")
         if batch_status_info.status == BatchStatus.COMPLETED:
             results = await self.batch_api_adapter.get_results(self.batch_api_job)
             processed_results = await self._postprocess(results)
             await self._mark_as_finished(batch_status_info)
+            logger.info(
+                f"Job {self.batch_api_job.id}: completed with {len(processed_results)} results"
+            )
             return ProcessedResults(
                 job_id=self.batch_api_job.id,
                 results=processed_results,
@@ -106,4 +117,5 @@ class BatchJobHandle:
     async def cancel(self) -> bool:
         batch_status_info = await self.batch_api_adapter.cancel(self.batch_api_job)
         await self._mark_as_finished(batch_status_info)
+        logger.info(f"Job {self.batch_api_job.id}: cancelled")
         return True
