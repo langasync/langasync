@@ -119,6 +119,63 @@ class TestConvertToAnthropicMessages:
         assert isinstance(result, tuple)
         assert len(result) == 2
 
+    def test_image_url_content(self):
+        """HumanMessage with image URL gets converted to Anthropic image source format."""
+        system, messages = custom_convert_to_anthropic_messages(
+            [
+                SystemMessage("You are helpful"),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "Describe this image."},
+                        {"type": "image", "url": "https://example.com/cat.jpg"},
+                    ]
+                ),
+            ]
+        )
+        assert system == "You are helpful"
+        assert messages == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image."},
+                    {
+                        "type": "image",
+                        "source": {"type": "url", "url": "https://example.com/cat.jpg"},
+                    },
+                ],
+            },
+        ]
+
+    def test_base64_image_content(self):
+        """HumanMessage with base64 image gets converted to Anthropic base64 source format."""
+        system, messages = custom_convert_to_anthropic_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "What is this?"},
+                        {"type": "image", "base64": "iVBOR...", "mime_type": "image/png"},
+                    ]
+                ),
+            ]
+        )
+        assert system is None
+        assert messages == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is this?"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "iVBOR...",
+                        },
+                    },
+                ],
+            },
+        ]
+
     def test_ai_message_with_tool_calls(self):
         """AI message with tool_calls gets converted to tool_use blocks."""
         ai_with_tools = AIMessage(

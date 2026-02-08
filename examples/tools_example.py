@@ -1,13 +1,15 @@
-"""Example script demonstrating Anthropic Batch API usage with tools.
+"""Example script demonstrating Batch API usage with tools.
 
 Usage:
-    # Submit a batch job
-    python examples/anthropic_tools_example.py run
+    # Submit a batch job (default: anthropic)
+    python examples/tools_example.py run
+    python examples/tools_example.py run anthropic
+    python examples/tools_example.py run openai
 
     # Fetch results (can be run later, even after process restart)
-    python examples/anthropic_tools_example.py fetch
+    python examples/tools_example.py fetch
 
-Requires ANTHROPIC_API_KEY in environment or .env file.
+Requires OPENAI_API_KEY or ANTHROPIC_API_KEY in environment or .env file.
 """
 
 import asyncio
@@ -15,17 +17,17 @@ import logging
 import sys
 
 from dotenv import load_dotenv
+from langchain_anthropic import ChatAnthropic
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+from langasync import batch_chain, BatchPoller, LangasyncSettings, BatchStatus
 
 load_dotenv()
 
 logging.getLogger("langasync").setLevel(logging.INFO)
 logging.getLogger("langasync").addHandler(logging.StreamHandler())
-
-from langchain_anthropic import ChatAnthropic
-from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel, Field
-
-from langasync import batch_chain, BatchPoller, LangasyncSettings, BatchStatus
 
 settings = LangasyncSettings(base_storage_path="./examples/.batch_jobs")
 
@@ -43,7 +45,7 @@ class SearchWeb(BaseModel):
     query: str = Field(description="The search query")
 
 
-async def run():
+async def run(model):
     """Submit a new batch job with tools."""
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -52,7 +54,6 @@ async def run():
         ]
     )
 
-    model = ChatAnthropic(model="claude-sonnet-4-5-20250929")
     model_with_tools = model.bind_tools([GetWeather, SearchWeb])
 
     # No parser - we want the raw AIMessage with tool_calls
@@ -71,7 +72,7 @@ async def run():
     handle = await batch_wrapper.submit(inputs)
     print(f"Batch submitted: {handle.job_id}")
     print(f"Jobs stored in: {settings.base_storage_path}")
-    print("\nRun 'python examples/anthropic_tools_example.py fetch' to get results.")
+    print("\nRun 'python examples/tools_example.py fetch' to get results.")
 
 
 async def fetch():
@@ -91,12 +92,20 @@ async def fetch():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python examples/anthropic_tools_example.py [run|fetch]")
+        print("Usage: python examples/tools_example.py [run|fetch] [openai|anthropic]")
         sys.exit(1)
 
     command = sys.argv[1]
     if command == "run":
-        asyncio.run(run())
+        provider = sys.argv[2] if len(sys.argv) > 2 else "anthropic"
+        if provider == "openai":
+            model = ChatOpenAI(model="gpt-4o-mini")
+        elif provider == "anthropic":
+            model = ChatAnthropic(model="claude-sonnet-4-5-20250929")
+        else:
+            print(f"Unknown provider: {provider}. Use 'openai' or 'anthropic'.")
+            sys.exit(1)
+        asyncio.run(run(model))
     elif command == "fetch":
         asyncio.run(fetch())
     else:

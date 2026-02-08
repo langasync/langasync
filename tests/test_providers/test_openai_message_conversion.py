@@ -75,6 +75,88 @@ class TestConvertToOpenAIMessages:
             },
         ]
 
+    def test_image_url_content(self):
+        """HumanMessage with image URL gets converted to OpenAI image_url format."""
+        result = convert_to_openai_messages(
+            [
+                SystemMessage("You are helpful"),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "Describe this image."},
+                        {"type": "image", "url": "https://example.com/cat.jpg"},
+                    ]
+                ),
+            ]
+        )
+        assert result == [
+            {"role": "system", "content": "You are helpful"},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image."},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/cat.jpg"}},
+                ],
+            },
+        ]
+
+    def test_base64_image_content(self):
+        """HumanMessage with base64 image gets converted to OpenAI image_url format."""
+        result = convert_to_openai_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "What is this?"},
+                        {"type": "image", "base64": "iVBOR...", "mime_type": "image/png"},
+                    ]
+                ),
+            ]
+        )
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is this?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,iVBOR..."},
+                    },
+                ],
+            },
+        ]
+
+    def test_file_content(self):
+        """HumanMessage with base64 file gets converted to OpenAI file format."""
+        result = convert_to_openai_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "Summarize."},
+                        {
+                            "type": "file",
+                            "base64": "JVBERi0xLjQK",
+                            "mime_type": "application/pdf",
+                            "filename": "document.pdf",
+                        },
+                    ]
+                ),
+            ]
+        )
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Summarize."},
+                    {
+                        "type": "file",
+                        "file": {
+                            "file_data": "data:application/pdf;base64,JVBERi0xLjQK",
+                            "filename": "document.pdf",
+                        },
+                    },
+                ],
+            },
+        ]
+
     def test_tool_message(self):
         """ToolMessage gets converted to tool role."""
         ai_with_tools = AIMessage(

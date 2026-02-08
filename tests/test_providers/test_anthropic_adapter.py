@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from pytest_httpx import HTTPXMock
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from langasync.providers.anthropic import AnthropicProviderJobAdapter
 from langasync.providers.interface import (
@@ -103,6 +103,64 @@ class TestCreateBatch:
                 "temperature": 0.7,
                 "max_tokens": 4096,  # ChatAnthropic default
                 "messages": [{"role": "user", "content": "How are you?"}],
+            },
+        }
+
+    async def test_create_batch_with_image_input(self, adapter, mock_model, httpx_mock: HTTPXMock):
+        """Test batch creation with image content in messages."""
+        httpx_mock.add_response(
+            method="POST",
+            url=BATCHES_URL,
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="in_progress",
+                processing=1,
+            ),
+        )
+
+        inputs = [
+            [
+                SystemMessage(content="You are a helpful assistant."),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "Describe this image."},
+                        {"type": "image", "url": "https://example.com/cat.jpg"},
+                    ]
+                ),
+            ]
+        ]
+        result = await adapter.create_batch(inputs, mock_model)
+
+        assert result == ProviderJob(
+            id="batch_abc123",
+            provider=Provider.ANTHROPIC,
+            created_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+        )
+
+        # Verify batch request content — _format_messages converts to Anthropic format
+        body = json.loads(httpx_mock.get_request().content)
+        assert body["requests"][0] == {
+            "custom_id": "0",
+            "params": {
+                "model": "claude-3-opus-20240229",
+                "temperature": 0.7,
+                "max_tokens": 4096,
+                "system": "You are a helpful assistant.",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Describe this image."},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "url",
+                                    "url": "https://example.com/cat.jpg",
+                                },
+                            },
+                        ],
+                    },
+                ],
             },
         }
 

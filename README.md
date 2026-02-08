@@ -132,6 +132,26 @@ model = ChatOpenAI().bind_tools([my_tool])
 chain = prompt | model
 ```
 
+### Multimodal (Images & PDFs)
+
+Pass images and documents as part of your batch inputs:
+
+```python
+from langchain_core.messages import HumanMessage, SystemMessage
+
+batch_wrapper = batch_chain(model, settings)
+
+await batch_wrapper.submit([
+    [
+        SystemMessage(content="You are a helpful assistant."),
+        HumanMessage(content=[
+            {"type": "text", "text": "Describe this image."},
+            {"type": "image", "url": "https://example.com/photo.jpg"},
+        ]),
+    ],
+])
+```
+
 ### Job Persistence
 
 Batch jobs can take up to 24 hours. Jobs persist automatically — resume after process restart:

@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 from pytest_httpx import HTTPXMock
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from langasync.providers.openai import OpenAIProviderJobAdapter
 from langasync.providers.interface import (
@@ -115,6 +115,67 @@ class TestCreateBatch:
                 }
             )
             assert expected in content
+
+    async def test_create_batch_with_image_input(self, adapter, mock_model, httpx_mock: HTTPXMock):
+        """Test batch creation with image content in messages."""
+        httpx_mock.add_response(
+            method="POST",
+            url=FILES_URL,
+            json=openai_file_upload_response(file_id="file-xyz789"),
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=BATCHES_URL,
+            json=openai_batch_response(batch_id="batch_abc123"),
+        )
+
+        inputs = [
+            [
+                SystemMessage(content="You are a helpful assistant."),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "Describe this image."},
+                        {"type": "image", "url": "https://example.com/cat.jpg"},
+                    ]
+                ),
+            ]
+        ]
+        result = await adapter.create_batch(inputs, mock_model)
+
+        assert result == ProviderJob(
+            id="batch_abc123",
+            provider=Provider.OPENAI,
+            created_at=datetime.fromtimestamp(1705320000),
+            metadata={"input_file_id": "file-xyz789"},
+        )
+
+        # Verify batch request content — LangChain converts {"type": "image"} to OpenAI format
+        content = httpx_mock.get_requests()[0].content.decode("utf-8")
+        expected = json.dumps(
+            {
+                "custom_id": "0",
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {
+                    "model": "gpt-4",
+                    "temperature": 0.7,
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Describe this image."},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": "https://example.com/cat.jpg"},
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }
+        )
+        assert expected in content
 
     async def test_create_batch_with_model_bindings(
         self, adapter, mock_model, httpx_mock: HTTPXMock
