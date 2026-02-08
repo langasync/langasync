@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langasync"
-version = "0.1.0"
-description = "Async API integration library for multiple providers"
+version = "0.1.1"
+description = "Use LLM batch APIs with your LangChain chains — 50% cost savings, zero code changes"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
