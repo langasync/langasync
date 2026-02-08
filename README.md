@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/langasync/langasync">
-    <img alt="langasync" src="langasync.png" width="400">
+    <img alt="langasync" src="https://raw.githubusercontent.com/langasync/langasync/master/langasync.png" width="400">
   </a>
 </p>
 

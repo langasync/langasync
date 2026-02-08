@@ -8,6 +8,12 @@ version = "0.1.1"
 description = "Use LLM batch APIs with your LangChain chains — 50% cost savings, zero code changes"
 readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "BSL-1.1"}
+
+[project.urls]
+Homepage = "https://github.com/langasync/langasync"
+Repository = "https://github.com/langasync/langasync"
+Issues = "https://github.com/langasync/langasync/issues"
 dependencies = [
     "pydantic>=2.0,<3.0",
     "pydantic-settings>=2.0,<3.0",
