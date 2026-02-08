@@ -1,0 +1,26 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "postgres-connection-string"
+description = "PostgreSQL connection string with credentials"
+regex = '''postgresql(?:\+psycopg2)?:\/\/[^:\s]+:[^@\s]+@'''
+keywords = ["postgresql"]
+
+[[rules]]
+id = "postgres-password-quote-plus"
+description = "PostgreSQL password via quote_plus"
+regex = '''(?i)(?:password|passwd|pwd)\s*=\s*quote_plus\s*\(\s*["'][^"']+["']\s*\)'''
+keywords = ["quote_plus"]
+
+[allowlist]
+description = "Allow dummy test keys"
+regexes = [
+    '''test-api-key''',
+    '''test-key''',
+    '''sk-test123''',
+    '''sk-from-model''',
+    '''sk-from-settings''',
+    '''sk-ant-from-model''',
+    '''sk-ant-from-settings''',
+]

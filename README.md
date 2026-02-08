@@ -246,7 +246,7 @@ batch_wrapper = batch_chain(chain, settings)
 
 ### Examples
 
-See [examples/](examples/) for complete working examples:
+See [examples/](https://github.com/langasync/langasync/tree/master/examples) for complete working examples:
 
 ```bash
 # Submit a batch job
@@ -264,6 +264,7 @@ python examples/openai_example.py fetch
 git clone https://github.com/langasync/langasync.git
 cd langasync
 pip install -e ".[dev]"
+pre-commit install
 ```
 
 ### Running Tests
