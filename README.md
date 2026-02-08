@@ -69,7 +69,7 @@ pip install langasync
 import asyncio
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langasync import batch_chain, BatchStatus
+from langasync import batch_chain, BatchPoller, BatchStatus
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a helpful assistant."),
@@ -81,17 +81,20 @@ chain = prompt | model
 batch_wrapper = batch_chain(chain)
 
 async def main():
+    # Submit — returns immediately
     job = await batch_wrapper.submit([
         {"topic": "quantum computing"},
         {"topic": "machine learning"},
         {"topic": "blockchain"},
     ])
+    print(f"Batch submitted: {job.job_id}")
 
-    result = await job.get_results()
-
-    if result.status_info.status == BatchStatus.COMPLETED:
-        for r in result.results:
-            print(r.content)
+    # Poll until complete — batch APIs typically take minutes to hours
+    poller = BatchPoller()
+    async for result in poller.wait_all():
+        if result.status_info.status == BatchStatus.COMPLETED:
+            for r in result.results:
+                print(r.content)
 
 asyncio.run(main())
 ```
