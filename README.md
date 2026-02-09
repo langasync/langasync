@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://pypi.org/project/langasync/"><img alt="PyPI" src="https://img.shields.io/pypi/v/langasync?color=blue"></a>
   <a href="https://pypi.org/project/langasync/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/langasync"></a>
-  <a href="https://github.com/langasync/langasync/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-BSL--1.1-blue"></a>
+  <a href="https://github.com/langasync/langasync/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
   <a href="https://github.com/langasync/langasync/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/langasync/langasync/actions/workflows/test.yml/badge.svg"></a>
 </p>
 
@@ -294,4 +294,4 @@ Contributions are welcome!
 
 ## License
 
-langasync is free to use for any purpose — personal projects, commercial products, production workloads, whatever you need. The only thing you can't do is take it and offer it as a competing batch-processing service. The full license is [BSL 1.1](LICENSE), which converts to Apache 2.0 on February 6, 2030.
+langasync is licensed under [Apache 2.0](LICENSE). Free to use for any purpose — personal projects, commercial products, production workloads.
