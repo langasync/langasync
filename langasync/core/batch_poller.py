@@ -86,6 +86,7 @@ class BatchPoller:
                 for job_id, service in services_to_watch.items():
                     result = await service.get_results()
                     if result.status_info.status in FINISHED_STATUSES:
+
                         completed.append((job_id, result))
 
                 for job_id, result in completed:
@@ -99,9 +100,14 @@ class BatchPoller:
                     new_services_to_watch = await self._get_new_pending_services_to_watch_dict()
                     services_to_watch = {**services_to_watch, **new_services_to_watch}
 
+                if len(completed) > 0:
+                    logger.info(
+                        f"Found {len(services_to_watch)} pending job(s). Polling for results..."
+                    )
+
             except Exception as e:
                 poll_error_counter += 1
-                logger.warning(f"Poll error ({poll_error_counter}/{MAX_POLLING_ERRORS}): {e}")
+                logger.warning(f"Retrying poll issue ({poll_error_counter}/{MAX_POLLING_ERRORS})")
                 if poll_error_counter >= MAX_POLLING_ERRORS:
                     self._raise_exception(e, poll_error_counter)
             else:
