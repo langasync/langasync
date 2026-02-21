@@ -14,8 +14,11 @@ Usage:
 
 from typing import Any
 
+import botocore.session as _botocore_session
+from botocore.validate import ParamValidator as _ParamValidator
 from openai.types import Batch as OpenAIBatch, FileObject as OpenAIFile, BatchError, ErrorObject
 from openai.types.chat import ChatCompletion as OpenAIChatCompletion
+from anthropic.types import Message as AnthropicMessage
 from anthropic.types.messages import (
     MessageBatch as AnthropicBatch,
     MessageBatchIndividualResponse as AnthropicResultLine,
@@ -27,6 +30,10 @@ from google.genai.types import (
     JobError as GeminiJobError,
     ProjectOperation as GeminiOperation,
 )
+
+_botocore = _botocore_session.get_session()
+_bedrock_model = _botocore.get_service_model("bedrock")
+_validator = _ParamValidator()
 
 
 class SchemaValidationError(Exception):
@@ -137,3 +144,40 @@ def validate_gemini_error(response: dict[str, Any]) -> GeminiJobError:
         return GeminiJobError.model_validate(response)
     except Exception as e:
         raise SchemaValidationError(f"Gemini JobError validation failed: {e}") from e
+
+
+def _validate_bedrock_shape(response: dict[str, Any], operation: str) -> dict[str, Any]:
+    """Validate response against a botocore output shape."""
+    shape = _bedrock_model.operation_model(operation).output_shape
+    report = _validator.validate(response, shape)
+    if report.has_errors():
+        raise SchemaValidationError(
+            f"Bedrock {operation} validation failed:\n{report.generate_report()}"
+        )
+    return response
+
+
+def validate_bedrock_create_job(response: dict[str, Any]) -> dict[str, Any]:
+    """Validate response against Bedrock CreateModelInvocationJob output shape."""
+    return _validate_bedrock_shape(response, "CreateModelInvocationJob")
+
+
+def validate_bedrock_get_job(response: dict[str, Any]) -> dict[str, Any]:
+    """Validate response against Bedrock GetModelInvocationJob output shape."""
+    return _validate_bedrock_shape(response, "GetModelInvocationJob")
+
+
+def validate_bedrock_list_jobs(response: dict[str, Any]) -> dict[str, Any]:
+    """Validate response against Bedrock ListModelInvocationJobs output shape."""
+    return _validate_bedrock_shape(response, "ListModelInvocationJobs")
+
+
+def validate_bedrock_model_output(response: dict[str, Any]) -> AnthropicMessage:
+    """Validate Bedrock modelOutput against Anthropic Message model.
+
+    Bedrock Claude batch output follows the Anthropic Messages API schema.
+    """
+    try:
+        return AnthropicMessage.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Bedrock modelOutput validation failed: {e}") from e

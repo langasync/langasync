@@ -9,6 +9,7 @@ Requires API keys in environment:
     - OPENAI_API_KEY
     - ANTHROPIC_API_KEY
     - GOOGLE_API_KEY
+    - BEDROCK_S3_BUCKET + BEDROCK_ROLE_ARN (+ AWS credentials)
 """
 
 import os
@@ -103,6 +104,46 @@ class TestAnthropicIntegration:
         with tempfile.TemporaryDirectory() as jobs_dir:
             settings = LangasyncSettings(base_storage_path=jobs_dir)
             chain = prompt | anthropic_model | parser
+            batch_wrapper = batch_chain(chain, settings)
+
+            # Submit with single input for speed/cost
+            handle = await batch_wrapper.submit([{"country": "France"}])
+            assert handle.job_id is not None
+
+            # Poll until complete
+            poller = BatchPoller(settings)
+            async for result in poller.wait_all():
+                assert result.status_info.status in (
+                    BatchStatus.COMPLETED,
+                    BatchStatus.FAILED,
+                    BatchStatus.EXPIRED,
+                )
+
+                if result.status_info.status == BatchStatus.COMPLETED:
+                    assert len(result.results) == 1
+                    country_info = result.results[0]
+                    assert isinstance(country_info, CountryInfo)
+                    assert country_info.capital == "Paris"
+                    assert country_info.continent == "Europe"
+
+
+@pytest.mark.integration
+class TestBedrockIntegration:
+    """Integration tests for AWS Bedrock Batch Inference."""
+
+    @pytest.fixture
+    def bedrock_model(self):
+        from langchain_aws import ChatBedrockConverse
+
+        if not os.environ.get("BEDROCK_S3_BUCKET"):
+            pytest.skip("BEDROCK_S3_BUCKET not set")
+        return ChatBedrockConverse(model="us.anthropic.claude-3-5-sonnet-20241022-v2:0")
+
+    async def test_batch_submit_and_poll(self, prompt, parser, bedrock_model):
+        """Test full batch flow: submit, poll, get results."""
+        with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
+            chain = prompt | bedrock_model | parser
             batch_wrapper = batch_chain(chain, settings)
 
             # Submit with single input for speed/cost

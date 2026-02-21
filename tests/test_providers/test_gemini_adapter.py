@@ -178,9 +178,7 @@ class TestCreateBatch:
             "parts": [{"text": "You are a helpful assistant."}]
         }
         # Only the human message is in contents
-        assert request_data["contents"] == [
-            {"role": "user", "parts": [{"text": "Hello!"}]}
-        ]
+        assert request_data["contents"] == [{"role": "user", "parts": [{"text": "Hello!"}]}]
 
     async def test_create_batch_with_model_bindings(
         self, adapter, mock_model, httpx_mock: HTTPXMock
@@ -389,7 +387,7 @@ class TestGetResults:
         ]
 
     async def test_get_results_with_tool_calls(
-        self, adapter, sample_batch_job, httpx_mock: HTTPXMock
+        self, adapter, sample_batch_job, httpx_mock: HTTPXMock, freeze_uuid
     ):
         """Test getting results that contain tool calls."""
         httpx_mock.add_response(
@@ -409,12 +407,7 @@ class TestGetResults:
             ),
         )
 
-        from unittest.mock import patch
-        import uuid as uuid_module
-
-        fixed_uuid = uuid_module.UUID("12345678-1234-5678-1234-567812345678")
-        with patch("langasync.providers.gemini.uuid.uuid4", return_value=fixed_uuid):
-            results = await adapter.get_results(sample_batch_job)
+        results = await adapter.get_results(sample_batch_job)
 
         assert results == [
             BatchItem(
@@ -429,7 +422,7 @@ class TestGetResults:
                         {
                             "name": "get_weather",
                             "args": {"location": "NYC"},
-                            "id": "12345678-1234-5678-1234-567812345678",
+                            "id": freeze_uuid,
                             "type": "tool_call",
                         }
                     ],

@@ -21,6 +21,15 @@ class LangasyncSettings(BaseSettings):
         default="https://generativelanguage.googleapis.com/v1beta",
         validation_alias="GOOGLE_BASE_URL",
     )
+    aws_access_key_id: str | None = Field(default=None, validation_alias="AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str | None = Field(
+        default=None, validation_alias="AWS_SECRET_ACCESS_KEY"
+    )
+    aws_session_token: str | None = Field(default=None, validation_alias="AWS_SESSION_TOKEN")
+    aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
+    bedrock_s3_bucket: str | None = Field(default=None, validation_alias="BEDROCK_S3_BUCKET")
+    bedrock_role_arn: str | None = Field(default=None, validation_alias="BEDROCK_ROLE_ARN")
+    bedrock_base_url: str | None = Field(default=None, validation_alias="BEDROCK_BASE_URL")
 
     # Langasync-specific settings — use LANGASYNC_ prefix
     batch_poll_interval: float = Field(

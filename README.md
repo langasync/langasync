@@ -23,9 +23,7 @@
   <a href="#contributing">Contributing</a>
 </p>
 
----
-
-**langasync** lets you use provider batch APIs (OpenAI, Anthropic, Google Gemini) with your existing LangChain chains. Wrap your chain, submit inputs, get results at half the cost.
+**langasync** lets you use provider batch APIs (OpenAI, Anthropic, Google Gemini, AWS Bedrock) with your existing LangChain chains. Wrap your chain, submit inputs, get results at half the cost.
 
 ```python
 from langasync import batch_chain
@@ -71,6 +69,9 @@ export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
 # or for Google Gemini:
 export GOOGLE_API_KEY=AIza...
+# or for AWS Bedrock:
+export BEDROCK_S3_BUCKET=my-batch-bucket
+export BEDROCK_ROLE_ARN=arn:aws:iam::123456789012:role/BedrockBatchRole
 ```
 
 ### Basic Usage
@@ -202,6 +203,7 @@ for r in result.results:
 | **OpenAI** | ✅ Supported | [Batch API](https://platform.openai.com/docs/guides/batch) | 50% |
 | **Anthropic** | ✅ Supported | [Message Batches](https://docs.anthropic.com/en/docs/build-with-claude/batch-processing) | 50% |
 | **Google Gemini** | ✅ Supported | [Batch API](https://ai.google.dev/gemini-api/docs/batch) | 50% |
+| **AWS Bedrock** | ✅ Supported | [Batch Inference](https://docs.aws.amazon.com/bedrock/latest/userguide/batch-inference.html) | Up to 50% |
 | Azure OpenAI | 🔜 Planned | — | — |
 
 ## Documentation
@@ -231,6 +233,15 @@ GOOGLE_API_KEY=AIza...
 OPENAI_BASE_URL=https://api.openai.com/v1
 ANTHROPIC_BASE_URL=https://api.anthropic.com
 GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+
+# AWS Bedrock
+AWS_ACCESS_KEY_ID=AKIA...        # or use ~/.aws/credentials / instance profiles
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=us-east-1
+BEDROCK_S3_BUCKET=my-batch-bucket
+BEDROCK_ROLE_ARN=arn:aws:iam::123456789012:role/BedrockBatchRole
+
+# Optional overrides
 LANGASYNC_BATCH_POLL_INTERVAL=60.0
 LANGASYNC_BASE_STORAGE_PATH=./langasync_jobs
 ```

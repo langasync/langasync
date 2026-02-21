@@ -27,6 +27,7 @@ class Provider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
+    BEDROCK = "bedrock"
 
 
 class BatchStatus(str, Enum):
