@@ -16,6 +16,11 @@ class LangasyncSettings(BaseSettings):
     anthropic_base_url: str = Field(
         default="https://api.anthropic.com", validation_alias="ANTHROPIC_BASE_URL"
     )
+    google_api_key: str | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
+    google_base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta",
+        validation_alias="GOOGLE_BASE_URL",
+    )
 
     # Langasync-specific settings — use LANGASYNC_ prefix
     batch_poll_interval: float = Field(

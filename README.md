@@ -25,7 +25,7 @@
 
 ---
 
-**langasync** lets you use provider batch APIs (OpenAI, Anthropic) with your existing LangChain chains. Wrap your chain, submit inputs, get results at half the cost.
+**langasync** lets you use provider batch APIs (OpenAI, Anthropic, Google Gemini) with your existing LangChain chains. Wrap your chain, submit inputs, get results at half the cost.
 
 ```python
 from langasync import batch_chain
@@ -69,6 +69,8 @@ pip install langasync
 export OPENAI_API_KEY=sk-...
 # or for Anthropic:
 export ANTHROPIC_API_KEY=sk-ant-...
+# or for Google Gemini:
+export GOOGLE_API_KEY=AIza...
 ```
 
 ### Basic Usage
@@ -199,7 +201,7 @@ for r in result.results:
 |----------|--------|-----------|---------|
 | **OpenAI** | ✅ Supported | [Batch API](https://platform.openai.com/docs/guides/batch) | 50% |
 | **Anthropic** | ✅ Supported | [Message Batches](https://docs.anthropic.com/en/docs/build-with-claude/batch-processing) | 50% |
-| Google Vertex AI | 🔜 Planned | — | — |
+| **Google Gemini** | ✅ Supported | [Batch API](https://ai.google.dev/gemini-api/docs/batch) | 50% |
 | Azure OpenAI | 🔜 Planned | — | — |
 
 ## Documentation
@@ -223,10 +225,12 @@ langasync reads configuration from environment variables or a `.env` file automa
 # Provider API keys
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_API_KEY=AIza...
 
 # Optional overrides
 OPENAI_BASE_URL=https://api.openai.com/v1
 ANTHROPIC_BASE_URL=https://api.anthropic.com
+GOOGLE_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 LANGASYNC_BATCH_POLL_INTERVAL=60.0
 LANGASYNC_BASE_STORAGE_PATH=./langasync_jobs
 ```

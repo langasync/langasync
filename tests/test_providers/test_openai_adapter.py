@@ -116,6 +116,55 @@ class TestCreateBatch:
             )
             assert expected in content
 
+    async def test_create_batch_with_system_message(
+        self, adapter, mock_model, httpx_mock: HTTPXMock
+    ):
+        """Test batch creation with system message."""
+        httpx_mock.add_response(
+            method="POST",
+            url=FILES_URL,
+            json=openai_file_upload_response(file_id="file-xyz789"),
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=BATCHES_URL,
+            json=openai_batch_response(batch_id="batch_abc123"),
+        )
+
+        inputs = [
+            [
+                SystemMessage(content="You are a helpful assistant."),
+                HumanMessage(content="Hello!"),
+            ]
+        ]
+        result = await adapter.create_batch(inputs, mock_model)
+
+        assert result == ProviderJob(
+            id="batch_abc123",
+            provider=Provider.OPENAI,
+            created_at=datetime.fromtimestamp(1705320000),
+            metadata={"input_file_id": "file-xyz789"},
+        )
+
+        # Verify system message is included in messages array
+        content = httpx_mock.get_requests()[0].content.decode("utf-8")
+        expected = json.dumps(
+            {
+                "custom_id": "0",
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {
+                    "model": "gpt-4",
+                    "temperature": 0.7,
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Hello!"},
+                    ],
+                },
+            }
+        )
+        assert expected in content
+
     async def test_create_batch_with_image_input(self, adapter, mock_model, httpx_mock: HTTPXMock):
         """Test batch creation with image content in messages."""
         httpx_mock.add_response(
@@ -460,6 +509,23 @@ class TestGetResults:
                 usage={"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
             ),
         ]
+
+
+    async def test_get_results_no_responses(
+        self, adapter, sample_batch_job, httpx_mock: HTTPXMock
+    ):
+        """Test getting results when batch has no output file."""
+        httpx_mock.add_response(
+            method="GET",
+            url="https://api.openai.com/v1/batches/batch_abc123",
+            json=openai_batch_response(
+                batch_id="batch_abc123",
+                status="in_progress",
+            ),
+        )
+
+        results = await adapter.get_results(sample_batch_job)
+        assert results == []
 
 
 class TestListBatches:

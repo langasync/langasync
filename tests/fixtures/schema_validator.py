@@ -20,6 +20,13 @@ from anthropic.types.messages import (
     MessageBatch as AnthropicBatch,
     MessageBatchIndividualResponse as AnthropicResultLine,
 )
+from google.genai.types import (
+    Candidate as GeminiCandidate,
+    GenerateContentResponse as GeminiResponse,
+    InlinedResponse as GeminiInlinedResponse,
+    JobError as GeminiJobError,
+    ProjectOperation as GeminiOperation,
+)
 
 
 class SchemaValidationError(Exception):
@@ -82,3 +89,51 @@ def validate_anthropic_result_line(response: dict[str, Any]) -> AnthropicResultL
         return AnthropicResultLine.model_validate(response)
     except Exception as e:
         raise SchemaValidationError(f"Anthropic result line validation failed: {e}") from e
+
+
+def validate_gemini_operation(response: dict[str, Any]) -> GeminiOperation:
+    """Validate response against Google Gemini ProjectOperation model.
+
+    Validates the Operation/LRO wrapper (name, metadata, done).
+    The 'response' field (inlined results) is excluded since ProjectOperation
+    doesn't model it — inline responses are validated separately via
+    validate_gemini_response.
+    """
+    try:
+        # Exclude 'response' field — ProjectOperation doesn't have it
+        filtered = {k: v for k, v in response.items() if k != "response"}
+        return GeminiOperation.model_validate(filtered)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini Operation validation failed: {e}") from e
+
+
+def validate_gemini_candidate(response: dict[str, Any]) -> GeminiCandidate:
+    """Validate response against Google Gemini Candidate model."""
+    try:
+        return GeminiCandidate.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini Candidate validation failed: {e}") from e
+
+
+def validate_gemini_response(response: dict[str, Any]) -> GeminiResponse:
+    """Validate response against Google Gemini GenerateContentResponse model."""
+    try:
+        return GeminiResponse.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini GenerateContentResponse validation failed: {e}") from e
+
+
+def validate_gemini_inline_response(response: dict[str, Any]) -> GeminiInlinedResponse:
+    """Validate response against Google Gemini InlinedResponse model."""
+    try:
+        return GeminiInlinedResponse.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini InlinedResponse validation failed: {e}") from e
+
+
+def validate_gemini_error(response: dict[str, Any]) -> GeminiJobError:
+    """Validate response against Google Gemini JobError model."""
+    try:
+        return GeminiJobError.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini JobError validation failed: {e}") from e

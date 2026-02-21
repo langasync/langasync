@@ -8,6 +8,7 @@ Usage:
 Requires API keys in environment:
     - OPENAI_API_KEY
     - ANTHROPIC_API_KEY
+    - GOOGLE_API_KEY
 """
 
 import os
@@ -102,6 +103,46 @@ class TestAnthropicIntegration:
         with tempfile.TemporaryDirectory() as jobs_dir:
             settings = LangasyncSettings(base_storage_path=jobs_dir)
             chain = prompt | anthropic_model | parser
+            batch_wrapper = batch_chain(chain, settings)
+
+            # Submit with single input for speed/cost
+            handle = await batch_wrapper.submit([{"country": "France"}])
+            assert handle.job_id is not None
+
+            # Poll until complete
+            poller = BatchPoller(settings)
+            async for result in poller.wait_all():
+                assert result.status_info.status in (
+                    BatchStatus.COMPLETED,
+                    BatchStatus.FAILED,
+                    BatchStatus.EXPIRED,
+                )
+
+                if result.status_info.status == BatchStatus.COMPLETED:
+                    assert len(result.results) == 1
+                    country_info = result.results[0]
+                    assert isinstance(country_info, CountryInfo)
+                    assert country_info.capital == "Paris"
+                    assert country_info.continent == "Europe"
+
+
+@pytest.mark.integration
+class TestGeminiIntegration:
+    """Integration tests for Gemini Batch API."""
+
+    @pytest.fixture
+    def gemini_model(self):
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        if not os.environ.get("GOOGLE_API_KEY"):
+            pytest.skip("GOOGLE_API_KEY not set")
+        return ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+
+    async def test_batch_submit_and_poll(self, prompt, parser, gemini_model):
+        """Test full batch flow: submit, poll, get results."""
+        with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
+            chain = prompt | gemini_model | parser
             batch_wrapper = batch_chain(chain, settings)
 
             # Submit with single input for speed/cost

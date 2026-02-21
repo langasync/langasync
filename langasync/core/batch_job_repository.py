@@ -80,7 +80,8 @@ class FileSystemBatchJobRepository(BatchJobRepository):
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
     def _job_path(self, job_id: str) -> Path:
-        return self.storage_dir / f"{job_id}.json"
+        safe_id = job_id.replace("/", "_")
+        return self.storage_dir / f"{safe_id}.json"
 
     async def save(self, batch_job: BatchJob) -> None:
         # Use cloudpickle to serialize the chain (supports RunnableLambda with lambdas)

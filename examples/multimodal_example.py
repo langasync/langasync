@@ -5,11 +5,12 @@ Usage:
     python examples/multimodal_example.py run
     python examples/multimodal_example.py run openai
     python examples/multimodal_example.py run anthropic
+    python examples/multimodal_example.py run google
 
     # Fetch results (can be run later, even after process restart)
     python examples/multimodal_example.py fetch
 
-Requires OPENAI_API_KEY or ANTHROPIC_API_KEY in environment or .env file.
+Requires OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_API_KEY in environment or .env file.
 """
 
 import asyncio
@@ -20,6 +21,7 @@ import httpx
 from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 
 from langasync import batch_chain, BatchPoller, LangasyncSettings, BatchStatus
@@ -108,7 +110,7 @@ async def fetch():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python examples/multimodal_example.py [run|fetch] [openai|anthropic]")
+        print("Usage: python examples/multimodal_example.py [run|fetch] [openai|anthropic|google]")
         sys.exit(1)
 
     command = sys.argv[1]
@@ -118,8 +120,10 @@ if __name__ == "__main__":
             model = ChatOpenAI(model="gpt-4o-mini")
         elif provider == "anthropic":
             model = ChatAnthropic(model="claude-sonnet-4-5-20250929")
+        elif provider == "google":
+            model = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
         else:
-            print(f"Unknown provider: {provider}. Use 'openai' or 'anthropic'.")
+            print(f"Unknown provider: {provider}. Use 'openai', 'anthropic', or 'google'.")
             sys.exit(1)
         asyncio.run(run(model))
     elif command == "fetch":
