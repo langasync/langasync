@@ -69,10 +69,12 @@ def _convert_to_gemini_messages(
                 system_instruction["parts"].extend(parts)
 
         elif isinstance(message, HumanMessage):
-            contents.append({
-                "role": "user",
-                "parts": _message_content_to_parts(message.content),
-            })
+            contents.append(
+                {
+                    "role": "user",
+                    "parts": _message_content_to_parts(message.content),
+                }
+            )
 
         elif isinstance(message, AIMessage):
             if message.tool_calls:
@@ -81,15 +83,15 @@ def _convert_to_gemini_messages(
                 if message.content:
                     parts.extend(_message_content_to_parts(message.content))
                 for tc in message.tool_calls:
-                    parts.append({
-                        "functionCall": {"name": tc["name"], "args": tc["args"]}
-                    })
+                    parts.append({"functionCall": {"name": tc["name"], "args": tc["args"]}})
                 contents.append({"role": "model", "parts": parts})
             else:
-                contents.append({
-                    "role": "model",
-                    "parts": _message_content_to_parts(message.content),
-                })
+                contents.append(
+                    {
+                        "role": "model",
+                        "parts": _message_content_to_parts(message.content),
+                    }
+                )
 
         elif isinstance(message, ToolMessage):
             # Gemini expects tool responses as user role with functionResponse
@@ -99,15 +101,19 @@ def _convert_to_gemini_messages(
                     response = json.loads(response)
                 except json.JSONDecodeError:
                     response = {"output": response}
-            contents.append({
-                "role": "user",
-                "parts": [{
-                    "functionResponse": {
-                        "name": message.name or "",
-                        "response": response,
-                    }
-                }],
-            })
+            contents.append(
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "name": message.name or "",
+                                "response": response,
+                            }
+                        }
+                    ],
+                }
+            )
 
         else:
             raise ValueError(f"Unsupported message type: {type(message)}")
@@ -316,11 +322,13 @@ class GeminiProviderJobAdapter(ProviderJobAdapterInterface):
         for part in content_parts:
             fc = part.get("functionCall")
             if fc:
-                tool_calls.append(ToolCall(
-                    name=fc["name"],
-                    args=fc.get("args", {}),
-                    id=str(uuid.uuid4()),
-                ))
+                tool_calls.append(
+                    ToolCall(
+                        name=fc["name"],
+                        args=fc.get("args", {}),
+                        id=str(uuid.uuid4()),
+                    )
+                )
 
         if tool_calls:
             ai_message = AIMessage(content=content_parts, tool_calls=tool_calls)

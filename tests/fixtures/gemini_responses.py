@@ -74,8 +74,13 @@ def gemini_batch_status_response(
     return gemini_batch_response(
         batch_name=batch_name,
         state=state,
-        done=state in ("BATCH_STATE_SUCCEEDED", "BATCH_STATE_FAILED",
-                        "BATCH_STATE_CANCELLED", "BATCH_STATE_EXPIRED"),
+        done=state
+        in (
+            "BATCH_STATE_SUCCEEDED",
+            "BATCH_STATE_FAILED",
+            "BATCH_STATE_CANCELLED",
+            "BATCH_STATE_EXPIRED",
+        ),
         batch_stats={
             "requestCount": str(total),
             "successfulRequestCount": str(succeeded),

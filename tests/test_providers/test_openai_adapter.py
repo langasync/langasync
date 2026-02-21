@@ -510,10 +510,7 @@ class TestGetResults:
             ),
         ]
 
-
-    async def test_get_results_no_responses(
-        self, adapter, sample_batch_job, httpx_mock: HTTPXMock
-    ):
+    async def test_get_results_no_responses(self, adapter, sample_batch_job, httpx_mock: HTTPXMock):
         """Test getting results when batch has no output file."""
         httpx_mock.add_response(
             method="GET",

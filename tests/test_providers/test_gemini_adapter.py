@@ -355,9 +355,7 @@ class TestGetResults:
             ),
         ]
 
-    async def test_get_results_with_errors(
-        self, adapter, sample_batch_job, httpx_mock: HTTPXMock
-    ):
+    async def test_get_results_with_errors(self, adapter, sample_batch_job, httpx_mock: HTTPXMock):
         """Test getting results with some failed requests."""
         httpx_mock.add_response(
             method="GET",
@@ -439,9 +437,7 @@ class TestGetResults:
             ),
         ]
 
-    async def test_get_results_no_responses(
-        self, adapter, sample_batch_job, httpx_mock: HTTPXMock
-    ):
+    async def test_get_results_no_responses(self, adapter, sample_batch_job, httpx_mock: HTTPXMock):
         """Test getting results when batch has no inline responses."""
         httpx_mock.add_response(
             method="GET",
@@ -547,7 +543,6 @@ class TestCancel:
         assert ":cancel" in str(requests[0].url)
         assert requests[1].method == "GET"
         assert requests[2].method == "GET"
-
 
     async def test_cancel_completes_to_cancelled(
         self, adapter, sample_batch_job, httpx_mock: HTTPXMock
