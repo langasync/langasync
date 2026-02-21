@@ -178,8 +178,9 @@ class TestCreateBatch:
             "parts": [{"text": "You are a helpful assistant."}]
         }
         # Only the human message is in contents
-        assert len(request_data["contents"]) == 1
-        assert request_data["contents"][0]["role"] == "user"
+        assert request_data["contents"] == [
+            {"role": "user", "parts": [{"text": "Hello!"}]}
+        ]
 
     async def test_create_batch_with_model_bindings(
         self, adapter, mock_model, httpx_mock: HTTPXMock
@@ -540,9 +541,9 @@ class TestCancel:
 
         # Verify cancel was called then status polled twice
         requests = httpx_mock.get_requests()
-        assert ":cancel" in str(requests[0].url)
-        assert requests[1].method == "GET"
-        assert requests[2].method == "GET"
+        assert str(requests[0].url) == f"{BASE_URL}/batches/abc123:cancel"
+        assert str(requests[1].url) == f"{BASE_URL}/batches/abc123"
+        assert str(requests[2].url) == f"{BASE_URL}/batches/abc123"
 
     async def test_cancel_completes_to_cancelled(
         self, adapter, sample_batch_job, httpx_mock: HTTPXMock

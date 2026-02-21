@@ -1,0 +1,32 @@
+name: Weekly dependency check
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9am UTC
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  test-latest-deps:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install with latest dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" --upgrade
+
+      - name: Show installed versions
+        run: pip freeze | grep -E "langchain|openai|anthropic|google|pydantic|httpx"
+
+      - name: Run unit tests
+        run: pytest tests -v
