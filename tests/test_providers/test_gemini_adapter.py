@@ -178,9 +178,7 @@ class TestCreateBatch:
             "parts": [{"text": "You are a helpful assistant."}]
         }
         # Only the human message is in contents
-        assert request_data["contents"] == [
-            {"role": "user", "parts": [{"text": "Hello!"}]}
-        ]
+        assert request_data["contents"] == [{"role": "user", "parts": [{"text": "Hello!"}]}]
 
     async def test_create_batch_with_model_bindings(
         self, adapter, mock_model, httpx_mock: HTTPXMock
