@@ -78,13 +78,13 @@ def _convert_to_gemini_messages(
 
         elif isinstance(message, AIMessage):
             if message.tool_calls:
-                parts: list[dict] = []
+                ai_parts: list[dict] = []
                 # Include any text content before tool calls
                 if message.content:
-                    parts.extend(_message_content_to_parts(message.content))
+                    ai_parts.extend(_message_content_to_parts(message.content))
                 for tc in message.tool_calls:
-                    parts.append({"functionCall": {"name": tc["name"], "args": tc["args"]}})
-                contents.append({"role": "model", "parts": parts})
+                    ai_parts.append({"functionCall": {"name": tc["name"], "args": tc["args"]}})
+                contents.append({"role": "model", "parts": ai_parts})
             else:
                 contents.append(
                     {
@@ -95,12 +95,12 @@ def _convert_to_gemini_messages(
 
         elif isinstance(message, ToolMessage):
             # Gemini expects tool responses as user role with functionResponse
-            response = message.content
-            if isinstance(response, str):
+            tool_response: Any = message.content
+            if isinstance(tool_response, str):
                 try:
-                    response = json.loads(response)
+                    tool_response = json.loads(tool_response)
                 except json.JSONDecodeError:
-                    response = {"output": response}
+                    tool_response = {"output": tool_response}
             contents.append(
                 {
                     "role": "user",
@@ -108,7 +108,7 @@ def _convert_to_gemini_messages(
                         {
                             "functionResponse": {
                                 "name": message.name or "",
-                                "response": response,
+                                "response": tool_response,
                             }
                         }
                     ],
