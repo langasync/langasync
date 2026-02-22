@@ -112,7 +112,9 @@ if __name__ == "__main__":
         elif provider == "google":
             model = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
         elif provider == "bedrock":
-            model = ChatBedrockConverse(model="us.anthropic.claude-sonnet-4-6")
+            model = ChatBedrockConverse(
+                model="us.anthropic.claude-sonnet-4-6", region_name="us-east-1"
+            )
         else:
             print(
                 f"Unknown provider: {provider}. Use 'openai', 'anthropic', 'google', or 'bedrock'."

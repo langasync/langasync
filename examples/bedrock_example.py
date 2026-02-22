@@ -51,7 +51,7 @@ async def run():
     ).partial(format_instructions=parser.get_format_instructions())
 
     # Batch inference requires cross-region inference profiles
-    model = ChatBedrockConverse(model="us.anthropic.claude-sonnet-4-6")
+    model = ChatBedrockConverse(model="us.anthropic.claude-sonnet-4-6", region_name="us-east-1")
 
     chain = prompt | model | parser
     batch_wrapper = batch_chain(chain, settings)
