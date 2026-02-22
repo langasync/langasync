@@ -108,8 +108,13 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
     """
 
     def __init__(self, settings: LangasyncSettings):
-        self.region = settings.aws_region
-        self._region_prefix = settings.bedrock_region_prefix
+        if not settings.aws_region:
+            raise AuthenticationError("AWS region required. Set AWS_REGION or AWS_DEFAULT_REGION.")
+        self.region: str = settings.aws_region
+        region_prefix = settings.bedrock_region_prefix
+        if not region_prefix:
+            raise AuthenticationError("AWS region required. Set AWS_REGION or AWS_DEFAULT_REGION.")
+        self._region_prefix: str = region_prefix
 
         s3_bucket = settings.bedrock_s3_bucket
         if not s3_bucket:

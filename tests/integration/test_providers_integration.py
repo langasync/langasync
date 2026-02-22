@@ -73,18 +73,13 @@ class TestOpenAIIntegration:
             # Poll until complete
             poller = BatchPoller(settings)
             async for result in poller.wait_all():
-                assert result.status_info.status in (
-                    BatchStatus.COMPLETED,
-                    BatchStatus.FAILED,
-                    BatchStatus.EXPIRED,
-                )
+                assert result.status_info.status == BatchStatus.COMPLETED
 
-                if result.status_info.status == BatchStatus.COMPLETED:
-                    assert len(result.results) == 1
-                    country_info = result.results[0]
-                    assert isinstance(country_info, CountryInfo)
-                    assert country_info.capital == "Paris"
-                    assert country_info.continent == "Europe"
+                assert len(result.results) == 1
+                country_info = result.results[0]
+                assert isinstance(country_info, CountryInfo)
+                assert country_info.capital == "Paris"
+                assert country_info.continent == "Europe"
 
     async def test_batch_submit_and_cancel(self, prompt, parser, openai_model):
         """Test submitting and immediately cancelling a batch job."""
@@ -126,18 +121,13 @@ class TestAnthropicIntegration:
             # Poll until complete
             poller = BatchPoller(settings)
             async for result in poller.wait_all():
-                assert result.status_info.status in (
-                    BatchStatus.COMPLETED,
-                    BatchStatus.FAILED,
-                    BatchStatus.EXPIRED,
-                )
+                assert result.status_info.status == BatchStatus.COMPLETED
 
-                if result.status_info.status == BatchStatus.COMPLETED:
-                    assert len(result.results) == 1
-                    country_info = result.results[0]
-                    assert isinstance(country_info, CountryInfo)
-                    assert country_info.capital == "Paris"
-                    assert country_info.continent == "Europe"
+                assert len(result.results) == 1
+                country_info = result.results[0]
+                assert isinstance(country_info, CountryInfo)
+                assert country_info.capital == "Paris"
+                assert country_info.continent == "Europe"
 
     async def test_batch_submit_and_cancel(self, prompt, parser, anthropic_model):
         """Test submitting and immediately cancelling a batch job."""
@@ -183,18 +173,13 @@ class TestBedrockIntegration:
             # Poll until complete
             poller = BatchPoller(settings)
             async for result in poller.wait_all():
-                assert result.status_info.status in (
-                    BatchStatus.COMPLETED,
-                    BatchStatus.FAILED,
-                    BatchStatus.EXPIRED,
-                )
+                assert result.status_info.status == BatchStatus.COMPLETED
 
-                if result.status_info.status == BatchStatus.COMPLETED:
-                    assert len(result.results) == 100
-                    country_info = result.results[0]
-                    assert isinstance(country_info, CountryInfo)
-                    assert country_info.capital == "Paris"
-                    assert country_info.continent == "Europe"
+                assert len(result.results) == 100
+                country_info = result.results[0]
+                assert isinstance(country_info, CountryInfo)
+                assert country_info.capital == "Paris"
+                assert country_info.continent == "Europe"
 
     async def test_batch_submit_and_cancel(self, prompt, parser, bedrock_model):
         """Test submitting and immediately cancelling a batch job."""
@@ -237,18 +222,13 @@ class TestGeminiIntegration:
             # Poll until complete
             poller = BatchPoller(settings)
             async for result in poller.wait_all():
-                assert result.status_info.status in (
-                    BatchStatus.COMPLETED,
-                    BatchStatus.FAILED,
-                    BatchStatus.EXPIRED,
-                )
+                assert result.status_info.status == BatchStatus.COMPLETED
 
-                if result.status_info.status == BatchStatus.COMPLETED:
-                    assert len(result.results) == 1
-                    country_info = result.results[0]
-                    assert isinstance(country_info, CountryInfo)
-                    assert country_info.capital == "Paris"
-                    assert country_info.continent == "Europe"
+                assert len(result.results) == 1
+                country_info = result.results[0]
+                assert isinstance(country_info, CountryInfo)
+                assert country_info.capital == "Paris"
+                assert country_info.continent == "Europe"
 
     async def test_batch_submit_and_cancel(self, prompt, parser, gemini_model):
         """Test submitting and immediately cancelling a batch job."""

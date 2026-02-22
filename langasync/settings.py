@@ -1,4 +1,4 @@
-from pydantic import Field, computed_field
+from pydantic import AliasChoices, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BEDROCK_REGION_GEO_PREFIXES = {
@@ -35,15 +35,20 @@ class LangasyncSettings(BaseSettings):
         default=None, validation_alias="AWS_SECRET_ACCESS_KEY"
     )
     aws_session_token: str | None = Field(default=None, validation_alias="AWS_SESSION_TOKEN")
-    aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
+    aws_region: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("AWS_REGION", "AWS_DEFAULT_REGION"),
+    )
     bedrock_s3_bucket: str | None = Field(default=None, validation_alias="BEDROCK_S3_BUCKET")
     bedrock_role_arn: str | None = Field(default=None, validation_alias="BEDROCK_ROLE_ARN")
     bedrock_base_url: str | None = Field(default=None, validation_alias="BEDROCK_BASE_URL")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def bedrock_region_prefix(self) -> str:
+    def bedrock_region_prefix(self) -> str | None:
         """Cross-region inference profile prefix derived from aws_region (e.g. 'us', 'eu', 'apac')."""
+        if not self.aws_region:
+            return None
         geo = self.aws_region.split("-")[0]
         if geo not in _BEDROCK_REGION_GEO_PREFIXES:
             raise ValueError(
