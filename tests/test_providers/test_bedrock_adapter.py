@@ -9,7 +9,9 @@ from freezegun import freeze_time
 
 import pytest
 
+from langchain_aws import ChatBedrock, ChatBedrockConverse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from pydantic import BaseModel
 
 from langasync.exceptions import BatchProviderApiError, UnsupportedProviderError
 from langasync.providers.bedrock import (
@@ -34,6 +36,7 @@ from tests.fixtures.bedrock_responses import (
     bedrock_manifest,
     bedrock_output_line,
     bedrock_error_output_line,
+    bedrock_model_output_error_line,
     bedrock_tool_use_output_line,
     bedrock_results_jsonl,
 )
@@ -297,8 +300,18 @@ class TestCreateBatch:
             bedrock_create_job_response(job_arn=JOB_ARN)
         )
 
+        # OpenAI format — what ChatBedrockConverse.bind_tools() produces
         bindings = {
-            "tools": [{"name": "get_weather", "description": "Get weather", "input_schema": {}}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
             "tool_choice": {"type": "auto"},
         }
         inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
@@ -317,7 +330,7 @@ class TestCreateBatch:
             },
         )
 
-        # Verify the first record includes model bindings
+        # Verify tools converted to Anthropic format in the record
         put_call = adapter._mock_s3.put_object.call_args
         lines = put_call.kwargs["Body"].decode().strip().split("\n")
         record = json.loads(lines[0])
@@ -328,12 +341,50 @@ class TestCreateBatch:
                 "max_tokens": 1024,
                 "temperature": 0.7,
                 "tools": [
-                    {"name": "get_weather", "description": "Get weather", "input_schema": {}}
+                    {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "input_schema": {"type": "object", "properties": {}},
+                    }
                 ],
                 "tool_choice": {"type": "auto"},
                 "messages": [{"role": "user", "content": "Message 0"}],
             },
         }
+
+    @freeze_time("2024-01-15 12:00:00", tz_offset=0)
+    async def test_create_batch_with_anthropic_format_tools(self, adapter, mock_model):
+        """ChatBedrock.bind_tools() produces Anthropic-format tools — passed through unchanged."""
+        adapter._mock_s3.put_object.return_value = {}
+        adapter._mock_bedrock.create_model_invocation_job.return_value = (
+            bedrock_create_job_response(job_arn=JOB_ARN)
+        )
+
+        bindings = {
+            "tools": [
+                {
+                    "name": "get_weather",
+                    "description": "Get weather",
+                    "input_schema": {"type": "object", "properties": {}},
+                }
+            ],
+            "tool_choice": {"type": "auto"},
+        }
+        inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
+        await adapter.create_batch(inputs, mock_model, model_bindings=bindings)
+
+        put_call = adapter._mock_s3.put_object.call_args
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        record = json.loads(lines[0])
+
+        # Anthropic-format tools should pass through unchanged
+        assert record["modelInput"]["tools"] == [
+            {
+                "name": "get_weather",
+                "description": "Get weather",
+                "input_schema": {"type": "object", "properties": {}},
+            }
+        ]
 
 
 class TestGetStatus:
@@ -344,6 +395,11 @@ class TestGetStatus:
         adapter._mock_bedrock.get_model_invocation_job.return_value = bedrock_job_status_response(
             status="InProgress"
         )
+        adapter._mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "langasync/test-uuid/output/test-job-id/manifest.json.out"},
+            ]
+        }
         adapter._mock_s3.get_object.return_value = _s3_get_object_response(
             json.dumps(
                 bedrock_manifest(
@@ -365,7 +421,7 @@ class TestGetStatus:
         adapter._mock_bedrock.get_model_invocation_job.return_value = bedrock_job_status_response(
             status="InProgress"
         )
-        adapter._mock_s3.get_object.side_effect = Exception("NoSuchKey")
+        adapter._mock_s3.list_objects_v2.return_value = {"Contents": []}
 
         result = await adapter.get_status(sample_batch_job)
 
@@ -378,6 +434,11 @@ class TestGetStatus:
         adapter._mock_bedrock.get_model_invocation_job.return_value = bedrock_job_status_response(
             status="Completed"
         )
+        adapter._mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "langasync/test-uuid/output/test-job-id/manifest.json.out"},
+            ]
+        }
         adapter._mock_s3.get_object.return_value = _s3_get_object_response(
             json.dumps(
                 bedrock_manifest(
@@ -399,6 +460,11 @@ class TestGetStatus:
         adapter._mock_bedrock.get_model_invocation_job.return_value = bedrock_job_status_response(
             status="PartiallyCompleted"
         )
+        adapter._mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "langasync/test-uuid/output/test-job-id/manifest.json.out"},
+            ]
+        }
         adapter._mock_s3.get_object.return_value = _s3_get_object_response(
             json.dumps(
                 bedrock_manifest(
@@ -421,6 +487,11 @@ class TestGetStatus:
             status="Failed",
             message="Model invocation failed",
         )
+        adapter._mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "langasync/test-uuid/output/test-job-id/manifest.json.out"},
+            ]
+        }
         adapter._mock_s3.get_object.return_value = _s3_get_object_response(
             json.dumps(
                 bedrock_manifest(
@@ -442,7 +513,7 @@ class TestGetStatus:
         adapter._mock_bedrock.get_model_invocation_job.return_value = bedrock_job_status_response(
             status="Submitted"
         )
-        adapter._mock_s3.get_object.side_effect = Exception("NoSuchKey")
+        adapter._mock_s3.list_objects_v2.return_value = {"Contents": []}
 
         result = await adapter.get_status(sample_batch_job)
 
@@ -477,7 +548,7 @@ class TestGetStatus:
             status=bedrock_status
         )
         # Manifest may or may not exist — not relevant to status mapping
-        adapter._mock_s3.get_object.side_effect = Exception("NoSuchKey")
+        adapter._mock_s3.list_objects_v2.return_value = {"Contents": []}
 
         result = await adapter.get_status(sample_batch_job)
         assert result.status == expected_status
@@ -554,6 +625,47 @@ class TestGetResults:
                 error={
                     "errorCode": "ThrottlingException",
                     "errorMessage": "Too many requests",
+                },
+            ),
+        ]
+
+    async def test_get_results_with_model_output_errors(self, adapter, sample_batch_job):
+        """Test errors embedded in modelOutput (input validation failures)."""
+        adapter._mock_s3.list_objects_v2.return_value = {
+            "Contents": [
+                {"Key": "langasync/test-uuid/output/test-job-id/input.jsonl.out"},
+            ]
+        }
+        adapter._mock_s3.get_object.return_value = _s3_get_object_response(
+            bedrock_results_jsonl(
+                [
+                    bedrock_output_line("0", content="Success!"),
+                    bedrock_model_output_error_line(
+                        "1",
+                        error_code=400,
+                        error_message="messages.0.content.1.image.source.base64.data: URL sources are not supported",
+                    ),
+                ]
+            )
+        )
+
+        results = await adapter.get_results(sample_batch_job)
+
+        assert results == [
+            BatchItem(
+                custom_id="0",
+                success=True,
+                content=AIMessage(content="Success!"),
+                usage={"input_tokens": 10, "output_tokens": 5},
+            ),
+            BatchItem(
+                custom_id="1",
+                success=False,
+                error={
+                    "errorCode": 400,
+                    "errorMessage": "messages.0.content.1.image.source.base64.data: URL sources are not supported",
+                    "expired": False,
+                    "retryable": False,
                 },
             ),
         ]
@@ -682,7 +794,7 @@ class TestCancel:
             bedrock_job_status_response(status="Stopped"),
         ]
         # Manifest may not exist for cancelled jobs
-        adapter._mock_s3.get_object.side_effect = Exception("NoSuchKey")
+        adapter._mock_s3.list_objects_v2.return_value = {"Contents": []}
 
         result = await adapter.cancel(sample_batch_job)
 
@@ -706,7 +818,7 @@ class TestCancel:
         adapter._mock_bedrock.get_model_invocation_job.return_value = bedrock_job_status_response(
             status="Stopping"
         )
-        adapter._mock_s3.get_object.side_effect = Exception("NoSuchKey")
+        adapter._mock_s3.list_objects_v2.return_value = {"Contents": []}
 
         result = await adapter.get_status(sample_batch_job)
         assert result == BatchStatusInfo(
@@ -885,3 +997,278 @@ class TestAdapterInit:
             pytest.raises(Exception, match="IAM role ARN required"),
         ):
             BedrockProviderJobAdapter(settings)
+
+
+class GetWeather(BaseModel):
+    """Get the current weather in a given location."""
+
+    location: str
+
+
+class TestWithChatBedrock:
+    """Tests using real ChatBedrock instances (no SimpleNamespace mocks)."""
+
+    @pytest.fixture
+    def chat_bedrock(self):
+        return ChatBedrock(
+            model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+            region_name="us-east-1",
+        )
+
+    @pytest.fixture
+    def chat_bedrock_converse(self):
+        return ChatBedrockConverse(
+            model="anthropic.claude-3-sonnet-20240229-v1:0",
+            region_name="us-east-1",
+        )
+
+    def test_get_provider_from_chat_bedrock(self, chat_bedrock):
+        """get_provider_from_model works with ChatBedrock."""
+        provider = get_provider_from_model(chat_bedrock, "us")
+        assert provider.model_id == "us.anthropic.claude-3-sonnet-20240229-v1:0"
+        assert provider.bedrock_provider == "anthropic"
+
+    def test_get_provider_from_chat_bedrock_converse(self, chat_bedrock_converse):
+        """get_provider_from_model works with ChatBedrockConverse."""
+        provider = get_provider_from_model(chat_bedrock_converse, "us")
+        assert provider.model_id == "us.anthropic.claude-3-sonnet-20240229-v1:0"
+        assert provider.bedrock_provider == "anthropic"
+
+    def test_build_config_chat_bedrock_defaults(self, chat_bedrock):
+        """ChatBedrock with no overrides gets anthropic_version and default max_tokens."""
+        provider = get_provider_from_model(chat_bedrock, "us")
+        config = provider.build_model_config(chat_bedrock)
+        assert config == {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+        }
+
+    def test_build_config_chat_bedrock_converse_defaults(self, chat_bedrock_converse):
+        """ChatBedrockConverse with no overrides gets anthropic_version and default max_tokens."""
+        provider = get_provider_from_model(chat_bedrock_converse, "us")
+        config = provider.build_model_config(chat_bedrock_converse)
+        assert config == {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+        }
+
+    def test_chat_bedrock_tools_pass_through(self, chat_bedrock):
+        """ChatBedrock.bind_tools() produces Anthropic format — passed through unchanged."""
+        bound = chat_bedrock.bind_tools([GetWeather])
+        provider = get_provider_from_model(bound, "us")
+        config = provider.build_model_config(bound, model_bindings=bound.kwargs)
+
+        assert config == {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+            "tools": [
+                {
+                    "name": "GetWeather",
+                    "description": "Get the current weather in a given location.",
+                    "input_schema": {
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                        "type": "object",
+                    },
+                }
+            ],
+        }
+
+    def test_chat_bedrock_converse_tools_converted(self, chat_bedrock_converse):
+        """ChatBedrockConverse.bind_tools() produces OpenAI format — converted to Anthropic."""
+        bound = chat_bedrock_converse.bind_tools([GetWeather])
+        provider = get_provider_from_model(bound, "us")
+        config = provider.build_model_config(bound, model_bindings=bound.kwargs)
+
+        assert config == {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+            "tools": [
+                {
+                    "name": "GetWeather",
+                    "description": "Get the current weather in a given location.",
+                    "input_schema": {
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                        "type": "object",
+                    },
+                }
+            ],
+        }
+
+    @freeze_time(FROZEN_NOW)
+    async def test_create_batch_with_chat_bedrock(self, adapter, chat_bedrock, freeze_uuid):
+        """End-to-end create_batch with real ChatBedrock instance."""
+        adapter._mock_s3.put_object.return_value = {}
+        adapter._mock_bedrock.create_model_invocation_job.return_value = (
+            bedrock_create_job_response(job_arn=JOB_ARN)
+        )
+
+        inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
+        result = await adapter.create_batch(inputs, chat_bedrock)
+
+        assert result == ProviderJob(
+            id=JOB_ARN,
+            provider=Provider.BEDROCK,
+            created_at=FROZEN_NOW,
+            metadata={
+                "input_key": f"langasync/{freeze_uuid}/input.jsonl",
+                "output_prefix": f"langasync/{freeze_uuid}/output/",
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
+            },
+        )
+
+        # Verify record format
+        put_call = adapter._mock_s3.put_object.call_args
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        assert len(lines) == BEDROCK_MIN_BATCH_SIZE
+        record = json.loads(lines[0])
+        assert record == {
+            "recordId": "0",
+            "modelInput": {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": "Message 0"}],
+            },
+        }
+
+    @freeze_time(FROZEN_NOW)
+    async def test_create_batch_with_chat_bedrock_converse(
+        self, adapter, chat_bedrock_converse, freeze_uuid
+    ):
+        """End-to-end create_batch with real ChatBedrockConverse instance."""
+        adapter._mock_s3.put_object.return_value = {}
+        adapter._mock_bedrock.create_model_invocation_job.return_value = (
+            bedrock_create_job_response(job_arn=JOB_ARN)
+        )
+
+        inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
+        result = await adapter.create_batch(inputs, chat_bedrock_converse)
+
+        assert result == ProviderJob(
+            id=JOB_ARN,
+            provider=Provider.BEDROCK,
+            created_at=FROZEN_NOW,
+            metadata={
+                "input_key": f"langasync/{freeze_uuid}/input.jsonl",
+                "output_prefix": f"langasync/{freeze_uuid}/output/",
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
+            },
+        )
+
+        put_call = adapter._mock_s3.put_object.call_args
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        assert len(lines) == BEDROCK_MIN_BATCH_SIZE
+        record = json.loads(lines[0])
+        assert record == {
+            "recordId": "0",
+            "modelInput": {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": "Message 0"}],
+            },
+        }
+
+    @freeze_time(FROZEN_NOW)
+    async def test_create_batch_with_chat_bedrock_converse_tools(
+        self, adapter, chat_bedrock_converse, freeze_uuid
+    ):
+        """End-to-end create_batch with ChatBedrockConverse + bind_tools."""
+        adapter._mock_s3.put_object.return_value = {}
+        adapter._mock_bedrock.create_model_invocation_job.return_value = (
+            bedrock_create_job_response(job_arn=JOB_ARN)
+        )
+
+        bound = chat_bedrock_converse.bind_tools([GetWeather])
+        inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
+        result = await adapter.create_batch(inputs, bound, model_bindings=bound.kwargs)
+
+        assert result == ProviderJob(
+            id=JOB_ARN,
+            provider=Provider.BEDROCK,
+            created_at=FROZEN_NOW,
+            metadata={
+                "input_key": f"langasync/{freeze_uuid}/input.jsonl",
+                "output_prefix": f"langasync/{freeze_uuid}/output/",
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
+            },
+        )
+
+        # Verify OpenAI-format tools are converted to Anthropic format in the JSONL
+        put_call = adapter._mock_s3.put_object.call_args
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        record = json.loads(lines[0])
+        assert record == {
+            "recordId": "0",
+            "modelInput": {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "tools": [
+                    {
+                        "name": "GetWeather",
+                        "description": "Get the current weather in a given location.",
+                        "input_schema": {
+                            "properties": {"location": {"type": "string"}},
+                            "required": ["location"],
+                            "type": "object",
+                        },
+                    }
+                ],
+                "messages": [{"role": "user", "content": "Message 0"}],
+            },
+        }
+
+    @freeze_time(FROZEN_NOW)
+    async def test_create_batch_with_chat_bedrock_tools(self, adapter, chat_bedrock, freeze_uuid):
+        """End-to-end create_batch with ChatBedrock + bind_tools."""
+        adapter._mock_s3.put_object.return_value = {}
+        adapter._mock_bedrock.create_model_invocation_job.return_value = (
+            bedrock_create_job_response(job_arn=JOB_ARN)
+        )
+
+        bound = chat_bedrock.bind_tools([GetWeather])
+        inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
+        result = await adapter.create_batch(inputs, bound, model_bindings=bound.kwargs)
+
+        assert result == ProviderJob(
+            id=JOB_ARN,
+            provider=Provider.BEDROCK,
+            created_at=FROZEN_NOW,
+            metadata={
+                "input_key": f"langasync/{freeze_uuid}/input.jsonl",
+                "output_prefix": f"langasync/{freeze_uuid}/output/",
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
+            },
+        )
+
+        # Verify Anthropic-format tools pass through unchanged in the JSONL
+        put_call = adapter._mock_s3.put_object.call_args
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        record = json.loads(lines[0])
+        assert record == {
+            "recordId": "0",
+            "modelInput": {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1024,
+                "tools": [
+                    {
+                        "name": "GetWeather",
+                        "description": "Get the current weather in a given location.",
+                        "input_schema": {
+                            "properties": {"location": {"type": "string"}},
+                            "required": ["location"],
+                            "type": "object",
+                        },
+                    }
+                ],
+                "messages": [{"role": "user", "content": "Message 0"}],
+            },
+        }

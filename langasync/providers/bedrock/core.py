@@ -56,6 +56,16 @@ def _convert_to_bedrock_messages(
     return provider.create_model_input(messages)
 
 
+def _has_url_image_source(model_input: dict[str, Any]) -> bool:
+    """Check if any message content block uses a URL image source."""
+    for msg in model_input.get("messages", []):
+        if isinstance(msg.get("content"), list):
+            for block in msg["content"]:
+                if block.get("source", {}).get("type") == "url":
+                    return True
+    return False
+
+
 def _to_bedrock_record(
     bedrock_provider: BedrockModelProvider,
     inp: LanguageModelInput,
@@ -146,6 +156,17 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
             _to_bedrock_record(bedrock_model_provider, inp, language_model, model_bindings, str(i))
             for i, inp in enumerate(inputs)
         ]
+
+        url_count = sum(1 for r in records if _has_url_image_source(r["modelInput"]))
+        if url_count:
+            logger.warning(
+                "Bedrock does not support image URL sources — %d of %d records "
+                "contain URL images and will likely fail. Use base64-encoded "
+                "images instead.",
+                url_count,
+                len(records),
+            )
+
         jsonl_content = "\n".join(json.dumps(r) for r in records)
 
         # Upload input to S3
@@ -198,11 +219,26 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
         )
 
     async def _read_manifest(self, output_prefix: str) -> dict | None:
-        """Read manifest.json.out from S3 output prefix for record counts."""
-        manifest_key = f"{output_prefix}manifest.json.out"
+        """Read manifest.json.out from S3 output.
+
+        Bedrock places output in a job-specific subdirectory under the
+        output prefix (e.g. ``{prefix}{job_id}/manifest.json.out``), so we
+        list objects and search for the manifest rather than guessing the path.
+        """
         try:
             async with self._session.client("s3") as s3:
-                response = await s3.get_object(Bucket=self.s3_bucket, Key=manifest_key)
+                list_response = await s3.list_objects_v2(
+                    Bucket=self.s3_bucket,
+                    Prefix=output_prefix,
+                )
+                manifest_keys = [
+                    obj["Key"]
+                    for obj in list_response.get("Contents", [])
+                    if obj["Key"].endswith("manifest.json.out")
+                ]
+                if not manifest_keys:
+                    return None
+                response = await s3.get_object(Bucket=self.s3_bucket, Key=manifest_keys[0])
                 body = await response["Body"].read()
                 return json.loads(body.decode("utf-8"))
         except Exception:
@@ -274,6 +310,13 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
             )
 
         if model_output:
+            # Bedrock may place errors inside modelOutput for input validation failures
+            if "errorCode" in model_output or "errorMessage" in model_output:
+                return BatchItem(
+                    custom_id=record_id,
+                    success=False,
+                    error=model_output,
+                )
             return bedrock_provider.parse_model_output(record_id, model_output)
 
         return BatchItem(

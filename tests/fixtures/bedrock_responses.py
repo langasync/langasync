@@ -144,6 +144,24 @@ def bedrock_error_output_line(
     }
 
 
+def bedrock_model_output_error_line(
+    record_id: str,
+    error_code: int = 400,
+    error_message: str = "URL sources are not supported",
+) -> dict[str, Any]:
+    """Factory for an error embedded in modelOutput (input validation failures)."""
+    return {
+        "recordId": record_id,
+        "modelInput": {},
+        "modelOutput": {
+            "errorCode": error_code,
+            "errorMessage": error_message,
+            "expired": False,
+            "retryable": False,
+        },
+    }
+
+
 def bedrock_tool_use_output_line(
     record_id: str,
     tool_name: str = "get_weather",
