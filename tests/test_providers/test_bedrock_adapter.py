@@ -944,6 +944,7 @@ class TestAdapterInit:
     def test_init_with_custom_base_url(self):
         """Test initialization stores endpoint_url for bedrock client."""
         settings = LangasyncSettings(
+            aws_region="us-east-1",
             bedrock_s3_bucket="my-bucket",
             bedrock_role_arn="arn:aws:iam::123:role/R",
             bedrock_base_url="https://custom-bedrock.example.com",
@@ -957,6 +958,7 @@ class TestAdapterInit:
     def test_init_from_settings(self):
         """Test initialization from settings object."""
         settings = LangasyncSettings(
+            aws_region="us-east-1",
             aws_access_key_id="AKID",
             aws_secret_access_key="secret",
             bedrock_s3_bucket="from-settings-bucket",
@@ -968,11 +970,27 @@ class TestAdapterInit:
             assert adapter.s3_bucket == "from-settings-bucket"
             assert adapter.role_arn == "arn:aws:iam::123:role/FromSettings"
 
+    def test_init_without_region_raises(self, monkeypatch):
+        """Test initialization without AWS region raises error."""
+        monkeypatch.delenv("AWS_REGION", raising=False)
+        monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+        settings = LangasyncSettings(
+            _env_file=None,
+            bedrock_s3_bucket="my-bucket",
+            bedrock_role_arn="arn:aws:iam::123:role/R",
+        )
+        with (
+            patch("langasync.providers.bedrock.core.aioboto3"),
+            pytest.raises(Exception, match="AWS region required"),
+        ):
+            BedrockProviderJobAdapter(settings)
+
     def test_init_without_s3_bucket_raises(self, monkeypatch):
         """Test initialization without S3 bucket raises error."""
         monkeypatch.delenv("BEDROCK_S3_BUCKET", raising=False)
         settings = LangasyncSettings(
             _env_file=None,
+            aws_region="us-east-1",
             aws_access_key_id="AKID",
             aws_secret_access_key="secret",
             bedrock_role_arn="arn:aws:iam::123:role/R",
@@ -988,6 +1006,7 @@ class TestAdapterInit:
         monkeypatch.delenv("BEDROCK_ROLE_ARN", raising=False)
         settings = LangasyncSettings(
             _env_file=None,
+            aws_region="us-east-1",
             aws_access_key_id="AKID",
             aws_secret_access_key="secret",
             bedrock_s3_bucket="my-bucket",
