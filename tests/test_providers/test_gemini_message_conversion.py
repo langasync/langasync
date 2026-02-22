@@ -9,7 +9,7 @@ have changed and our conversion needs updating.
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from langasync.providers.gemini import _convert_to_gemini_messages
+from langasync.providers.gemini import _convert_content_part, _convert_to_gemini_messages
 
 
 class TestConvertToGeminiMessages:
@@ -181,6 +181,29 @@ class TestConvertToGeminiMessages:
             {"inline_data": {"mime_type": "image/png", "data": "iVBOR"}},
         ]
 
+    def test_base64_image_content(self):
+        """HumanMessage with base64 image gets converted to inline_data."""
+        system, contents = _convert_to_gemini_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "What is this?"},
+                        {"type": "image", "base64": "iVBOR...", "mime_type": "image/png"},
+                    ]
+                ),
+            ]
+        )
+        assert system is None
+        assert contents == [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": "What is this?"},
+                    {"inline_data": {"mime_type": "image/png", "data": "iVBOR..."}},
+                ],
+            },
+        ]
+
     def test_openai_image_url_format(self):
         """OpenAI-style image_url content is converted to Gemini format."""
         system, contents = _convert_to_gemini_messages(
@@ -236,7 +259,7 @@ class TestConvertToGeminiMessages:
         ]
 
     def test_ai_message_with_tool_calls_and_text(self):
-        """AI message with both text content and tool_calls includes both."""
+        """AI message with tool_calls ignores text content (matches upstream behavior)."""
         ai_with_tools = AIMessage(
             content="I'll check the weather.",
             tool_calls=[{"name": "get_weather", "args": {"location": "NYC"}, "id": "call_123"}],
@@ -250,7 +273,6 @@ class TestConvertToGeminiMessages:
             {
                 "role": "model",
                 "parts": [
-                    {"text": "I'll check the weather."},
                     {"functionCall": {"name": "get_weather", "args": {"location": "NYC"}}},
                 ],
             },
@@ -330,9 +352,41 @@ class TestConvertToGeminiMessages:
             },
         ]
 
-    def test_unsupported_message_type_raises(self):
-        """Unsupported message type raises ValueError."""
-        from langchain_core.messages import ChatMessage
+    def test_multiple_tool_calls_in_ai_message(self):
+        """AI message with multiple tool calls."""
+        ai_with_tools = AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "get_weather", "args": {"location": "NYC"}, "id": "call_1"},
+                {"name": "get_time", "args": {"timezone": "EST"}, "id": "call_2"},
+            ],
+        )
+        system, contents = _convert_to_gemini_messages(
+            [HumanMessage("Weather and time?"), ai_with_tools]
+        )
+        assert system is None
+        assert contents == [
+            {"role": "user", "parts": [{"text": "Weather and time?"}]},
+            {
+                "role": "model",
+                "parts": [
+                    {"functionCall": {"name": "get_weather", "args": {"location": "NYC"}}},
+                    {"functionCall": {"name": "get_time", "args": {"timezone": "EST"}}},
+                ],
+            },
+        ]
 
-        with pytest.raises(ValueError, match="Unsupported message type"):
-            _convert_to_gemini_messages([ChatMessage(content="Hello", role="custom")])
+    def test_prompt_value_input(self):
+        """PromptValue from ChatPromptTemplate is handled correctly."""
+        from langchain_core.prompts import ChatPromptTemplate
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", "You are helpful"),
+                ("user", "Hello {name}"),
+            ]
+        )
+        prompt_value = prompt.invoke({"name": "World"})
+        system, contents = _convert_to_gemini_messages(prompt_value)
+        assert system == {"parts": [{"text": "You are helpful"}]}
+        assert contents == [{"role": "user", "parts": [{"text": "Hello World"}]}]

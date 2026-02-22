@@ -24,6 +24,7 @@ from tests.fixtures.gemini_responses import (
     gemini_inline_result,
     gemini_error_result,
     gemini_tool_call_inline_result,
+    gemini_thinking_inline_result,
     gemini_list_batches_response,
 )
 
@@ -419,10 +420,7 @@ class TestGetResults:
                 custom_id="0",
                 success=True,
                 content=AIMessage(
-                    content=[
-                        {"text": "I'll check the weather."},
-                        {"functionCall": {"name": "get_weather", "args": {"location": "NYC"}}},
-                    ],
+                    content=["I'll check the weather."],
                     tool_calls=[
                         {
                             "name": "get_weather",
@@ -433,6 +431,43 @@ class TestGetResults:
                     ],
                 ),
                 usage={"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+            ),
+        ]
+
+    async def test_get_results_with_thinking(
+        self, adapter, sample_batch_job, httpx_mock: HTTPXMock
+    ):
+        """Test getting results that contain thinking parts."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/batches/abc123",
+            json=gemini_batch_response(
+                batch_name="batches/abc123",
+                state="BATCH_STATE_SUCCEEDED",
+                done=True,
+                inlined_responses=[
+                    gemini_thinking_inline_result(
+                        "0",
+                        thinking_text="Let me reason step by step...",
+                        answer_text="The answer is 42.",
+                    ),
+                ],
+            ),
+        )
+
+        results = await adapter.get_results(sample_batch_job)
+
+        assert results == [
+            BatchItem(
+                custom_id="0",
+                success=True,
+                content=AIMessage(
+                    content=[
+                        {"type": "thinking", "thinking": "Let me reason step by step..."},
+                        "The answer is 42.",
+                    ],
+                ),
+                usage={"prompt_tokens": 10, "completion_tokens": 15, "total_tokens": 25},
             ),
         ]
 
