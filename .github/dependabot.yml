@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     commit-message:
       prefix: "deps"
     labels:
@@ -15,3 +15,5 @@ updates:
       - dependency-name: "langchain-openai"
       - dependency-name: "openai"
       - dependency-name: "anthropic"
+      - dependency-name: "google-genai"
+      - dependency-name: "aioboto3"

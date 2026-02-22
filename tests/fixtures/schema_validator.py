@@ -14,12 +14,26 @@ Usage:
 
 from typing import Any
 
+import botocore.session as _botocore_session
+from botocore.validate import ParamValidator as _ParamValidator
 from openai.types import Batch as OpenAIBatch, FileObject as OpenAIFile, BatchError, ErrorObject
 from openai.types.chat import ChatCompletion as OpenAIChatCompletion
+from anthropic.types import Message as AnthropicMessage
 from anthropic.types.messages import (
     MessageBatch as AnthropicBatch,
     MessageBatchIndividualResponse as AnthropicResultLine,
 )
+from google.genai.types import (
+    Candidate as GeminiCandidate,
+    GenerateContentResponse as GeminiResponse,
+    InlinedResponse as GeminiInlinedResponse,
+    JobError as GeminiJobError,
+    ProjectOperation as GeminiOperation,
+)
+
+_botocore = _botocore_session.get_session()
+_bedrock_model = _botocore.get_service_model("bedrock")
+_validator = _ParamValidator()
 
 
 class SchemaValidationError(Exception):
@@ -82,3 +96,88 @@ def validate_anthropic_result_line(response: dict[str, Any]) -> AnthropicResultL
         return AnthropicResultLine.model_validate(response)
     except Exception as e:
         raise SchemaValidationError(f"Anthropic result line validation failed: {e}") from e
+
+
+def validate_gemini_operation(response: dict[str, Any]) -> GeminiOperation:
+    """Validate response against Google Gemini ProjectOperation model.
+
+    Validates the Operation/LRO wrapper (name, metadata, done).
+    The 'response' field (inlined results) is excluded since ProjectOperation
+    doesn't model it — inline responses are validated separately via
+    validate_gemini_response.
+    """
+    try:
+        # Exclude 'response' field — ProjectOperation doesn't have it
+        filtered = {k: v for k, v in response.items() if k != "response"}
+        return GeminiOperation.model_validate(filtered)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini Operation validation failed: {e}") from e
+
+
+def validate_gemini_candidate(response: dict[str, Any]) -> GeminiCandidate:
+    """Validate response against Google Gemini Candidate model."""
+    try:
+        return GeminiCandidate.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini Candidate validation failed: {e}") from e
+
+
+def validate_gemini_response(response: dict[str, Any]) -> GeminiResponse:
+    """Validate response against Google Gemini GenerateContentResponse model."""
+    try:
+        return GeminiResponse.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini GenerateContentResponse validation failed: {e}") from e
+
+
+def validate_gemini_inline_response(response: dict[str, Any]) -> GeminiInlinedResponse:
+    """Validate response against Google Gemini InlinedResponse model."""
+    try:
+        return GeminiInlinedResponse.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini InlinedResponse validation failed: {e}") from e
+
+
+def validate_gemini_error(response: dict[str, Any]) -> GeminiJobError:
+    """Validate response against Google Gemini JobError model."""
+    try:
+        return GeminiJobError.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Gemini JobError validation failed: {e}") from e
+
+
+def _validate_bedrock_shape(response: dict[str, Any], operation: str) -> dict[str, Any]:
+    """Validate response against a botocore output shape."""
+    shape = _bedrock_model.operation_model(operation).output_shape
+    report = _validator.validate(response, shape)
+    if report.has_errors():
+        raise SchemaValidationError(
+            f"Bedrock {operation} validation failed:\n{report.generate_report()}"
+        )
+    return response
+
+
+def validate_bedrock_create_job(response: dict[str, Any]) -> dict[str, Any]:
+    """Validate response against Bedrock CreateModelInvocationJob output shape."""
+    return _validate_bedrock_shape(response, "CreateModelInvocationJob")
+
+
+def validate_bedrock_get_job(response: dict[str, Any]) -> dict[str, Any]:
+    """Validate response against Bedrock GetModelInvocationJob output shape."""
+    return _validate_bedrock_shape(response, "GetModelInvocationJob")
+
+
+def validate_bedrock_list_jobs(response: dict[str, Any]) -> dict[str, Any]:
+    """Validate response against Bedrock ListModelInvocationJobs output shape."""
+    return _validate_bedrock_shape(response, "ListModelInvocationJobs")
+
+
+def validate_bedrock_model_output(response: dict[str, Any]) -> AnthropicMessage:
+    """Validate Bedrock modelOutput against Anthropic Message model.
+
+    Bedrock Claude batch output follows the Anthropic Messages API schema.
+    """
+    try:
+        return AnthropicMessage.model_validate(response)
+    except Exception as e:
+        raise SchemaValidationError(f"Bedrock modelOutput validation failed: {e}") from e

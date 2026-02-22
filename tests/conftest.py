@@ -15,3 +15,11 @@ def test_settings(tmp_path) -> LangasyncSettings:
         anthropic_base_url="https://api.anthropic.com",
         base_storage_path=str(tmp_path),
     )
+
+
+@pytest.fixture
+def freeze_uuid(monkeypatch) -> str:
+    """Freeze UUID generation to a deterministic value."""
+    value = "frozen-uuid"
+    monkeypatch.setenv("FROZEN_UUID", value)
+    return value

@@ -106,6 +106,47 @@ class TestCreateBatch:
             },
         }
 
+    async def test_create_batch_with_system_message(
+        self, adapter, mock_model, httpx_mock: HTTPXMock
+    ):
+        """Test batch creation with system message."""
+        httpx_mock.add_response(
+            method="POST",
+            url=BATCHES_URL,
+            json=anthropic_batch_status_response(
+                batch_id="batch_abc123",
+                processing_status="in_progress",
+                processing=1,
+            ),
+        )
+
+        inputs = [
+            [
+                SystemMessage(content="You are a helpful assistant."),
+                HumanMessage(content="Hello!"),
+            ]
+        ]
+        result = await adapter.create_batch(inputs, mock_model)
+
+        assert result == ProviderJob(
+            id="batch_abc123",
+            provider=Provider.ANTHROPIC,
+            created_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+        )
+
+        # Verify system message is extracted to top-level system field
+        body = json.loads(httpx_mock.get_request().content)
+        assert body["requests"][0] == {
+            "custom_id": "0",
+            "params": {
+                "model": "claude-3-opus-20240229",
+                "temperature": 0.7,
+                "max_tokens": 4096,
+                "system": "You are a helpful assistant.",
+                "messages": [{"role": "user", "content": "Hello!"}],
+            },
+        }
+
     async def test_create_batch_with_image_input(self, adapter, mock_model, httpx_mock: HTTPXMock):
         """Test batch creation with image content in messages."""
         httpx_mock.add_response(

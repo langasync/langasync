@@ -1,6 +1,5 @@
 """Pass-through adapter for chains without a model."""
 
-import uuid
 from abc import ABC, abstractmethod
 from typing import Callable
 from datetime import datetime
@@ -11,6 +10,7 @@ from langchain_core.language_models import LanguageModelInput
 
 from langasync.exceptions import provider_error_handling
 from langasync.settings import langasync_settings, LangasyncSettings
+from langasync.utils import generate_uuid
 from langasync.providers.interface import (
     ProviderJobAdapterInterface,
     ProviderJob,
@@ -80,7 +80,7 @@ class NoModelProviderJobAdapter(ProviderJobAdapterInterface):
         language_model: LanguageModelType,
         model_bindings: dict | None = None,
     ) -> ProviderJob:
-        batch_id = f"no-model-{uuid.uuid4()}"
+        batch_id = f"no-model-{generate_uuid()}"
         batch_api_job = ProviderJob(
             id=batch_id,
             provider=Provider.NONE,
