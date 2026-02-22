@@ -26,6 +26,7 @@ dependencies = [
     # Tight upper bound: we import _format_messages (private), no semver guarantees
     "langchain-anthropic>=1.0,<1.4",
     "aioboto3>=13.0,<16.0",
+    "langchain-aws>=1.0,<2.0",
 ]
 
 [project.urls]
