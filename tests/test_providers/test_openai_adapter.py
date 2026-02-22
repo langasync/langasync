@@ -343,7 +343,7 @@ class TestGetStatus:
             ("completed", BatchStatus.COMPLETED),
             ("failed", BatchStatus.FAILED),
             ("cancelled", BatchStatus.CANCELLED),
-            ("cancelling", BatchStatus.IN_PROGRESS),
+            ("cancelling", BatchStatus.CANCELLED),
             ("expired", BatchStatus.EXPIRED),
         ],
     )
@@ -574,7 +574,7 @@ class TestCancel:
     """Test cancel method."""
 
     async def test_cancel_batch(self, adapter, sample_batch_job, httpx_mock: HTTPXMock):
-        """Test cancelling a batch waits until cancelled."""
+        """Test cancelling a batch returns immediately once cancelling."""
         # Mock cancel request
         httpx_mock.add_response(
             method="POST",
@@ -585,23 +585,13 @@ class TestCancel:
             ),
         )
 
-        # Mock get_status calls - first cancelling, then cancelled
+        # First poll returns cancelling which is now terminal
         httpx_mock.add_response(
             method="GET",
             url="https://api.openai.com/v1/batches/batch_abc123",
             json=openai_batch_status_response(
                 batch_id="batch_abc123",
                 status="cancelling",
-                total=100,
-                completed=50,
-            ),
-        )
-        httpx_mock.add_response(
-            method="GET",
-            url="https://api.openai.com/v1/batches/batch_abc123",
-            json=openai_batch_status_response(
-                batch_id="batch_abc123",
-                status="cancelled",
                 total=100,
                 completed=50,
             ),
@@ -616,11 +606,10 @@ class TestCancel:
             failed=0,
         )
 
-        # Verify cancel was called then status polled twice
+        # Verify cancel was called then status polled once
         requests = httpx_mock.get_requests()
         assert requests[0].url.path == "/v1/batches/batch_abc123/cancel"
         assert requests[1].url.path == "/v1/batches/batch_abc123"
-        assert requests[2].url.path == "/v1/batches/batch_abc123"
 
     async def test_cancel_completes_to_cancelled(
         self, adapter, sample_batch_job, httpx_mock: HTTPXMock
@@ -640,7 +629,7 @@ class TestCancel:
 
         result = await adapter.get_status(sample_batch_job)
         assert result == BatchStatusInfo(
-            status=BatchStatus.IN_PROGRESS, total=100, completed=50, failed=0
+            status=BatchStatus.CANCELLED, total=100, completed=50, failed=0
         )
 
         # Second call: cancelled

@@ -164,7 +164,7 @@ class TestBedrockIntegration:
         if not os.environ.get("BEDROCK_S3_BUCKET"):
             pytest.skip("BEDROCK_S3_BUCKET not set")
         return ChatBedrockConverse(
-            model="us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+            model="us.anthropic.claude-sonnet-4-6",
             region_name="us-east-1",
         )
 
