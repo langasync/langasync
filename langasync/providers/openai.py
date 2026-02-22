@@ -291,8 +291,7 @@ class OpenAIProviderJobAdapter(ProviderJobAdapterInterface):
         await self._client.post(f"{self.base_url}/batches/{batch_api_job.id}/cancel")
 
         # Poll until batch reaches a terminal state
-        # OpenAI cancellation can take up to 10 minutes
-        cancel_timeout_seconds = 600
+        cancel_timeout_seconds = 60
         for _ in range(cancel_timeout_seconds):
             status_info = await self.get_status(batch_api_job)
             if status_info.status in FINISHED_STATUSES:
