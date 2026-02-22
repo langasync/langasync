@@ -44,7 +44,7 @@ def _map_openai_status(status: str) -> BatchStatus:
         "completed": BatchStatus.COMPLETED,
         "failed": BatchStatus.FAILED,
         "cancelled": BatchStatus.CANCELLED,
-        "cancelling": BatchStatus.IN_PROGRESS,
+        "cancelling": BatchStatus.CANCELLED,
         "expired": BatchStatus.EXPIRED,
     }
     return mapping.get(status, BatchStatus.PENDING)
