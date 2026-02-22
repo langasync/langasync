@@ -237,3 +237,149 @@ class TestConvertToAnthropicMessages:
                 ],
             },
         ]
+
+    def test_ai_message_with_text_and_tool_calls(self):
+        """AI message with both text content and tool_calls includes both."""
+        ai_with_tools = AIMessage(
+            content="I'll check the weather.",
+            tool_calls=[{"name": "get_weather", "args": {"location": "NYC"}, "id": "call_123"}],
+        )
+        system, messages = custom_convert_to_anthropic_messages(
+            [HumanMessage("What is the weather?"), ai_with_tools]
+        )
+        assert system is None
+        assert messages == [
+            {"role": "user", "content": "What is the weather?"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "I'll check the weather."},
+                    {
+                        "type": "tool_use",
+                        "name": "get_weather",
+                        "input": {"location": "NYC"},
+                        "id": "call_123",
+                    },
+                ],
+            },
+        ]
+
+    def test_multiple_tool_calls_in_ai_message(self):
+        """AI message with multiple tool calls."""
+        ai_with_tools = AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "get_weather", "args": {"location": "NYC"}, "id": "call_1"},
+                {"name": "get_time", "args": {"timezone": "EST"}, "id": "call_2"},
+            ],
+        )
+        system, messages = custom_convert_to_anthropic_messages(
+            [HumanMessage("Weather and time?"), ai_with_tools]
+        )
+        assert system is None
+        assert messages == [
+            {"role": "user", "content": "Weather and time?"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "get_weather",
+                        "input": {"location": "NYC"},
+                        "id": "call_1",
+                    },
+                    {
+                        "type": "tool_use",
+                        "name": "get_time",
+                        "input": {"timezone": "EST"},
+                        "id": "call_2",
+                    },
+                ],
+            },
+        ]
+
+    def test_data_uri_image(self):
+        """Data URI image gets converted to base64 source format."""
+        system, messages = custom_convert_to_anthropic_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "What is this?"},
+                        {"type": "image", "url": "data:image/png;base64,iVBOR"},
+                    ]
+                ),
+            ]
+        )
+        assert system is None
+        assert messages == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is this?"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "iVBOR",
+                        },
+                    },
+                ],
+            },
+        ]
+
+    def test_openai_image_url_format(self):
+        """OpenAI-style image_url content is converted to Anthropic format."""
+        system, messages = custom_convert_to_anthropic_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "What's this?"},
+                        {"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}},
+                    ]
+                ),
+            ]
+        )
+        assert system is None
+        assert messages == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What's this?"},
+                    {
+                        "type": "image",
+                        "source": {"type": "url", "url": "https://example.com/img.jpg"},
+                    },
+                ],
+            },
+        ]
+
+    def test_prompt_value_input(self):
+        """PromptValue from ChatPromptTemplate is handled correctly."""
+        from langchain_core.prompts import ChatPromptTemplate
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", "You are helpful"),
+                ("user", "Hello {name}"),
+            ]
+        )
+        prompt_value = prompt.invoke({"name": "World"})
+        system, messages = custom_convert_to_anthropic_messages(prompt_value)
+        assert system == "You are helpful"
+        assert messages == [{"role": "user", "content": "Hello World"}]
+
+    def test_multiple_system_messages(self):
+        """Multiple system messages become a list of content blocks."""
+        system, messages = custom_convert_to_anthropic_messages(
+            [
+                SystemMessage("You are helpful."),
+                SystemMessage("Be concise."),
+                HumanMessage("Hello"),
+            ]
+        )
+        assert system == [
+            {"type": "text", "text": "You are helpful."},
+            {"type": "text", "text": "Be concise."},
+        ]
+        assert messages == [{"role": "user", "content": "Hello"}]

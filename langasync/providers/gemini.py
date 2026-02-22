@@ -52,6 +52,8 @@ def _convert_content_part(part: dict) -> dict:
         return {"text": part["text"]}
 
     if part_type == "image":
+        if "base64" in part:
+            return {"inline_data": {"mime_type": part["mime_type"], "data": part["base64"]}}
         url = part["url"]
         if url.startswith("data:"):
             # data:image/jpeg;base64,/9j/4AAQ...
@@ -71,8 +73,34 @@ def _convert_content_part(part: dict) -> dict:
     if part_type == "file":
         return {"inline_data": {"mime_type": part["mime_type"], "data": part["base64"]}}
 
-    # Already in Gemini format or unknown — pass through
-    return part
+    if part_type == "media":
+        mime_type = part["mime_type"]
+        if "data" in part:
+            return {"inline_data": {"data": part["data"], "mime_type": mime_type}}
+        if "file_uri" in part:
+            result: dict[str, Any] = {
+                "file_data": {"file_uri": part["file_uri"], "mime_type": mime_type}
+            }
+            if "video_metadata" in part:
+                result["video_metadata"] = part["video_metadata"]
+            return result
+        raise ValueError(f"Media part must have either data or file_uri: {part}")
+
+    if part_type == "executable_code":
+        return {"executable_code": {"language": part["language"], "code": part["executable_code"]}}
+
+    if part_type == "code_execution_result":
+        return {
+            "code_execution_result": {
+                "output": part["code_execution_result"],
+                "outcome": part.get("outcome", "OUTCOME_OK"),
+            }
+        }
+
+    if part_type == "thinking":
+        return {"text": part["thinking"], "thought": True}
+
+    raise ValueError(f"Unsupported content part type: {part_type}")
 
 
 def _convert_tools(openai_tools: list[dict]) -> list[dict]:
@@ -147,12 +175,10 @@ def _convert_to_gemini_messages(
 
         elif isinstance(message, AIMessage):
             if message.tool_calls:
-                ai_parts: list[dict] = []
-                # Include any text content before tool calls
-                if message.content:
-                    ai_parts.extend(_message_content_to_parts(message.content))
-                for tc in message.tool_calls:
-                    ai_parts.append({"functionCall": {"name": tc["name"], "args": tc["args"]}})
+                ai_parts: list[dict] = [
+                    {"functionCall": {"name": tc["name"], "args": tc["args"]}}
+                    for tc in message.tool_calls
+                ]
                 contents.append({"role": "model", "parts": ai_parts})
             else:
                 contents.append(

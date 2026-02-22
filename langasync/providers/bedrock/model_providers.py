@@ -11,30 +11,13 @@ from typing import Any, Callable
 
 from langchain_anthropic.chat_models import _format_messages
 from langchain_anthropic.output_parsers import extract_tool_calls
+from langchain_aws.function_calling import convert_to_anthropic_tool
 from langchain_core.messages import AIMessage, BaseMessage
 
 from langasync.exceptions import UnsupportedProviderError
 from langasync.providers.interface import BatchItem, LanguageModelType
 
 logger = logging.getLogger(__name__)
-
-
-def _convert_tools(openai_tools: list[dict]) -> list[dict]:
-    """Convert OpenAI-format tools from ChatBedrockConverse to Anthropic tool format.
-
-    OpenAI: [{"type": "function", "function": {"name": ..., "parameters": ...}}]
-    Anthropic: [{"name": ..., "description": ..., "input_schema": ...}]
-    """
-    anthropic_tools = []
-    for tool in openai_tools:
-        func = tool["function"]
-        converted: dict[str, Any] = {"name": func["name"]}
-        if func.get("description"):
-            converted["description"] = func["description"]
-        if func.get("parameters"):
-            converted["input_schema"] = func["parameters"]
-        anthropic_tools.append(converted)
-    return anthropic_tools
 
 
 class BedrockProviderEnum(str, Enum):
@@ -115,7 +98,7 @@ class AnthropicBedrockProvider(BedrockModelProvider):
         # ChatBedrock.bind_tools() produces Anthropic-format tools (no conversion needed)
         raw_tools = config.get("tools")
         if raw_tools and raw_tools[0].get("type") == "function":
-            config["tools"] = _convert_tools(raw_tools)
+            config["tools"] = [convert_to_anthropic_tool(t) for t in raw_tools]
 
         return config
 
