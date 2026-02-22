@@ -1,1 +1,1 @@
-"""Integration tests that run against real APIs."""
+"""Integration tests that run against the real APIs."""
