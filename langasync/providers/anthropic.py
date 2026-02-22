@@ -227,7 +227,7 @@ class AnthropicProviderJobAdapter(ProviderJobAdapterInterface):
             message = result.get("message", {})
             content_blocks = message.get("content", [])
 
-            # Match LangChain's ChatAnthropic behavior exactly
+            # Same 3-branch logic as ChatAnthropic._create_chat_result (response parsing)
             if (
                 len(content_blocks) == 1
                 and content_blocks[0].get("type") == "text"

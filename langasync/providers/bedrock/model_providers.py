@@ -119,6 +119,7 @@ class AnthropicBedrockProvider(BedrockModelProvider):
     ) -> BatchItem:
         content_blocks = model_output.get("content", [])
 
+        # Same 3-branch logic as ChatAnthropic._create_chat_result (response parsing)
         if (
             len(content_blocks) == 1
             and content_blocks[0].get("type") == "text"
