@@ -131,7 +131,7 @@ class TestCreateBatch:
             created_at=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
         )
 
-        # Verify image content is passed through as Gemini parts
+        # Verify image content is converted to Gemini format
         body = json.loads(httpx_mock.get_request().content)
         request_data = body["batch"]["input_config"]["requests"]["requests"][0]["request"]
         assert request_data["system_instruction"] == {
@@ -141,8 +141,13 @@ class TestCreateBatch:
             {
                 "role": "user",
                 "parts": [
-                    {"type": "text", "text": "Describe this image."},
-                    {"type": "image", "url": "https://example.com/cat.jpg"},
+                    {"text": "Describe this image."},
+                    {
+                        "file_data": {
+                            "mime_type": "image/jpeg",
+                            "file_uri": "https://example.com/cat.jpg",
+                        }
+                    },
                 ],
             }
         ]

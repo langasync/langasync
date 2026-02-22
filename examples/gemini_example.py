@@ -47,7 +47,7 @@ async def run():
         ]
     ).partial(format_instructions=parser.get_format_instructions())
 
-    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    model = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
 
     chain = prompt | model | parser
     batch_wrapper = batch_chain(chain, settings)

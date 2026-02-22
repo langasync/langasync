@@ -49,10 +49,8 @@ def gemini_batch_response(
         for item in inlined_responses:
             validate_gemini_inline_response(item)
         response["response"] = {
-            "output": {
-                "inlinedResponses": {
-                    "responses": inlined_responses,
-                }
+            "inlinedResponses": {
+                "inlinedResponses": inlined_responses,
             }
         }
 

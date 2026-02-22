@@ -86,6 +86,19 @@ class TestOpenAIIntegration:
                     assert country_info.capital == "Paris"
                     assert country_info.continent == "Europe"
 
+    async def test_batch_submit_and_cancel(self, prompt, parser, openai_model):
+        """Test submitting and immediately cancelling a batch job."""
+        with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
+            chain = prompt | openai_model | parser
+            batch_wrapper = batch_chain(chain, settings)
+
+            handle = await batch_wrapper.submit([{"country": "France"}])
+            assert handle.job_id is not None
+
+            cancelled = await handle.cancel()
+            assert cancelled is True
+
 
 @pytest.mark.integration
 class TestAnthropicIntegration:
@@ -126,6 +139,19 @@ class TestAnthropicIntegration:
                     assert country_info.capital == "Paris"
                     assert country_info.continent == "Europe"
 
+    async def test_batch_submit_and_cancel(self, prompt, parser, anthropic_model):
+        """Test submitting and immediately cancelling a batch job."""
+        with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
+            chain = prompt | anthropic_model | parser
+            batch_wrapper = batch_chain(chain, settings)
+
+            handle = await batch_wrapper.submit([{"country": "France"}])
+            assert handle.job_id is not None
+
+            cancelled = await handle.cancel()
+            assert cancelled is True
+
 
 @pytest.mark.integration
 class TestBedrockIntegration:
@@ -146,8 +172,9 @@ class TestBedrockIntegration:
             chain = prompt | bedrock_model | parser
             batch_wrapper = batch_chain(chain, settings)
 
-            # Submit with single input for speed/cost
-            handle = await batch_wrapper.submit([{"country": "France"}])
+            # Bedrock requires minimum 100 inputs
+            inputs = [{"country": "France"}] * 100
+            handle = await batch_wrapper.submit(inputs)
             assert handle.job_id is not None
 
             # Poll until complete
@@ -160,11 +187,25 @@ class TestBedrockIntegration:
                 )
 
                 if result.status_info.status == BatchStatus.COMPLETED:
-                    assert len(result.results) == 1
+                    assert len(result.results) == 100
                     country_info = result.results[0]
                     assert isinstance(country_info, CountryInfo)
                     assert country_info.capital == "Paris"
                     assert country_info.continent == "Europe"
+
+    async def test_batch_submit_and_cancel(self, prompt, parser, bedrock_model):
+        """Test submitting and immediately cancelling a batch job."""
+        with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
+            chain = prompt | bedrock_model | parser
+            batch_wrapper = batch_chain(chain, settings)
+
+            inputs = [{"country": f"Country {i}"} for i in range(100)]
+            handle = await batch_wrapper.submit(inputs)
+            assert handle.job_id is not None
+
+            cancelled = await handle.cancel()
+            assert cancelled is True
 
 
 @pytest.mark.integration
@@ -177,7 +218,7 @@ class TestGeminiIntegration:
 
         if not os.environ.get("GOOGLE_API_KEY"):
             pytest.skip("GOOGLE_API_KEY not set")
-        return ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+        return ChatGoogleGenerativeAI(model="gemini-2.5-pro")
 
     async def test_batch_submit_and_poll(self, prompt, parser, gemini_model):
         """Test full batch flow: submit, poll, get results."""
@@ -205,3 +246,16 @@ class TestGeminiIntegration:
                     assert isinstance(country_info, CountryInfo)
                     assert country_info.capital == "Paris"
                     assert country_info.continent == "Europe"
+
+    async def test_batch_submit_and_cancel(self, prompt, parser, gemini_model):
+        """Test submitting and immediately cancelling a batch job."""
+        with tempfile.TemporaryDirectory() as jobs_dir:
+            settings = LangasyncSettings(base_storage_path=jobs_dir)
+            chain = prompt | gemini_model | parser
+            batch_wrapper = batch_chain(chain, settings)
+
+            handle = await batch_wrapper.submit([{"country": "France"}])
+            assert handle.job_id is not None
+
+            cancelled = await handle.cancel()
+            assert cancelled is True

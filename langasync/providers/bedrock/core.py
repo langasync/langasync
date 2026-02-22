@@ -7,53 +7,66 @@ from datetime import datetime, timezone
 from typing import Any
 
 import aioboto3
-from langchain_anthropic.chat_models import _format_messages
-from langchain_anthropic.output_parsers import extract_tool_calls
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompt_values import PromptValue
 
-from langasync.exceptions import ApiTimeoutError, AuthenticationError, provider_error_handling
-from langasync.settings import LangasyncSettings
-from langasync.utils import generate_uuid
-
+from langasync.exceptions import (
+    ApiTimeoutError,
+    AuthenticationError,
+    provider_error_handling,
+)
+from langasync.providers.bedrock.model_providers import (
+    BedrockModelProvider,
+    get_provider,
+    get_provider_from_model,
+)
 from langasync.providers.interface import (
     FINISHED_STATUSES,
-    ProviderJobAdapterInterface,
-    ProviderJob,
     BatchItem,
     BatchStatus,
     BatchStatusInfo,
     LanguageModelType,
     Provider,
+    ProviderJob,
+    ProviderJobAdapterInterface,
 )
+from langasync.settings import LangasyncSettings
+from langasync.utils import generate_uuid
 
 logger = logging.getLogger(__name__)
 
-
-# --- Message Conversion (Bedrock Claude uses Anthropic Messages format) ---
+BEDROCK_MIN_BATCH_SIZE = 100
 
 
 def _convert_to_bedrock_messages(
     inp: LanguageModelInput,
-) -> tuple[str | list[dict] | None, list[dict]]:
-    """Convert LangChain input to Bedrock/Anthropic messages format."""
+    provider: BedrockModelProvider,
+) -> dict[str, Any]:
+    """Convert LangChain input to Bedrock modelInput format."""
+    messages: list[BaseMessage]
     if isinstance(inp, PromptValue):
-        inp = inp.to_messages()
-    if isinstance(inp, str):
-        inp = [HumanMessage(content=inp)]
-    if isinstance(inp, BaseMessage):
-        inp = [inp]
-    system, messages = _format_messages(inp)  # type: ignore[arg-type]
-    return system, messages
+        messages = inp.to_messages()
+    elif isinstance(inp, str):
+        messages = [HumanMessage(content=inp)]
+    elif isinstance(inp, BaseMessage):
+        messages = [inp]
+    else:
+        messages = [m for m in inp if isinstance(m, BaseMessage)]
+    return provider.create_model_input(messages)
 
 
-def _to_bedrock_record(inp: LanguageModelInput, model_config: dict, record_id: str) -> dict:
+def _to_bedrock_record(
+    bedrock_provider: BedrockModelProvider,
+    inp: LanguageModelInput,
+    language_model: LanguageModelType,
+    model_bindings: dict[str, Any] | None,
+    record_id: str,
+) -> dict[str, Any]:
     """Convert LanguageModelInput to Bedrock batch record format."""
-    system, messages = _convert_to_bedrock_messages(inp)
-    model_input = {**model_config, "messages": messages}
-    if system:
-        model_input["system"] = system
+
+    model_config = bedrock_provider.build_model_config(language_model, model_bindings)
+    model_input = {**model_config, **_convert_to_bedrock_messages(inp, bedrock_provider)}
     return {"recordId": record_id, "modelInput": model_input}
 
 
@@ -86,6 +99,7 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
 
     def __init__(self, settings: LangasyncSettings):
         self.region = settings.aws_region
+        self._region_prefix = settings.bedrock_region_prefix
 
         s3_bucket = settings.bedrock_s3_bucket
         if not s3_bucket:
@@ -111,43 +125,6 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
         if settings.bedrock_base_url:
             self._bedrock_kwargs["endpoint_url"] = settings.bedrock_base_url
 
-    def _get_model_config(
-        self, language_model: LanguageModelType, model_bindings: dict | None = None
-    ) -> tuple[str, dict[str, Any]]:
-        """Extract Bedrock model ID and Anthropic-format config from LangChain model.
-
-        Returns:
-            Tuple of (model_id for Bedrock API, model_config dict for modelInput)
-        """
-        model = (
-            getattr(language_model, "model_id", None)
-            or getattr(language_model, "model_name", None)
-            or getattr(language_model, "model", None)
-        )
-        if not model:
-            raise ValueError(
-                "Could not determine model name from language model. "
-                "Ensure your model has a 'model', 'model_name', or 'model_id' attribute."
-            )
-
-        config: dict[str, Any] = {"anthropic_version": "bedrock-2023-05-31"}
-
-        for param in ("max_tokens", "temperature", "top_p", "top_k", "stop_sequences"):
-            value = getattr(language_model, param, None)
-            if value is not None:
-                config[param] = value
-
-        # max_tokens is required for Anthropic on Bedrock
-        if "max_tokens" not in config:
-            config["max_tokens"] = 1024
-
-        config.update(getattr(language_model, "model_kwargs", {}))
-
-        if model_bindings:
-            config.update(model_bindings)
-
-        return model, config
-
     @provider_error_handling
     async def create_batch(
         self,
@@ -156,10 +133,19 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
         model_bindings: dict | None = None,
     ) -> ProviderJob:
         """Create a new batch inference job with Bedrock."""
-        model_id, model_config = self._get_model_config(language_model, model_bindings)
+        if len(inputs) < BEDROCK_MIN_BATCH_SIZE:
+            raise ValueError(
+                f"Bedrock batch inference requires at least {BEDROCK_MIN_BATCH_SIZE} records, "
+                f"got {len(inputs)}."
+            )
+
+        bedrock_model_provider = get_provider_from_model(language_model, self._region_prefix)
 
         # Build JSONL content
-        records = [_to_bedrock_record(inp, model_config, str(i)) for i, inp in enumerate(inputs)]
+        records = [
+            _to_bedrock_record(bedrock_model_provider, inp, language_model, model_bindings, str(i))
+            for i, inp in enumerate(inputs)
+        ]
         jsonl_content = "\n".join(json.dumps(r) for r in records)
 
         # Upload input to S3
@@ -179,7 +165,7 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
         # Create batch inference job
         async with self._session.client("bedrock", **self._bedrock_kwargs) as bedrock:
             response = await bedrock.create_model_invocation_job(
-                modelId=model_id,
+                modelId=bedrock_model_provider.model_id,
                 jobName=f"langasync-{batch_uuid}",
                 roleArn=self.role_arn,
                 inputDataConfig={
@@ -205,7 +191,8 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
             metadata={
                 "input_key": input_key,
                 "output_prefix": output_prefix,
-                "model_id": model_id,
+                "model_id": bedrock_model_provider.model_id,
+                "bedrock_provider": bedrock_model_provider.bedrock_provider,
                 "total_records": len(inputs),
             },
         )
@@ -224,10 +211,8 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
     @provider_error_handling
     async def get_status(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         """Get the current status of a batch job."""
-        job_id = batch_api_job.id.split("/")[-1] if "/" in batch_api_job.id else batch_api_job.id
-
         async with self._session.client("bedrock", **self._bedrock_kwargs) as bedrock:
-            data = await bedrock.get_model_invocation_job(jobIdentifier=job_id)
+            data = await bedrock.get_model_invocation_job(jobIdentifier=batch_api_job.id)
 
         status = data.get("status", "Submitted")
         mapped_status = _map_bedrock_status(status)
@@ -273,7 +258,9 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
             for job in data.get("invocationJobSummaries", [])
         ]
 
-    def _parse_result_line(self, data: dict) -> BatchItem:
+    def _parse_result_line(
+        self, data: dict[str, Any], bedrock_provider: BedrockModelProvider
+    ) -> BatchItem:
         """Parse a single line from Bedrock output JSONL."""
         record_id = data.get("recordId", "")
         model_output = data.get("modelOutput")
@@ -287,28 +274,7 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
             )
 
         if model_output:
-            content_blocks = model_output.get("content", [])
-
-            # Match LangChain ChatAnthropic behavior (same as anthropic.py)
-            if (
-                len(content_blocks) == 1
-                and content_blocks[0].get("type") == "text"
-                and not content_blocks[0].get("citations")
-            ):
-                content = content_blocks[0].get("text", "")
-                ai_message = AIMessage(content=content)
-            elif any(b.get("type") == "tool_use" for b in content_blocks):
-                tool_calls = extract_tool_calls(content_blocks)
-                ai_message = AIMessage(content=content_blocks, tool_calls=tool_calls)
-            else:
-                ai_message = AIMessage(content=content_blocks)
-
-            return BatchItem(
-                custom_id=record_id,
-                success=True,
-                content=ai_message,
-                usage=model_output.get("usage"),
-            )
+            return bedrock_provider.parse_model_output(record_id, model_output)
 
         return BatchItem(
             custom_id=record_id,
@@ -323,6 +289,11 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
         if not output_prefix:
             return []
 
+        bedrock_provider = get_provider(
+            batch_api_job.metadata["bedrock_provider"],
+            batch_api_job.metadata["model_id"],
+            self._region_prefix,
+        )
         logger.debug(f"Listing output files for batch {batch_api_job.id}")
 
         async with self._session.client("s3") as s3:
@@ -349,7 +320,7 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
                 content = body.decode("utf-8")
                 for line in content.strip().split("\n"):
                     if line:
-                        result = self._parse_result_line(json.loads(line))
+                        result = self._parse_result_line(json.loads(line), bedrock_provider)
                         results.append(result)
 
         results.sort(key=lambda r: int(r.custom_id) if r.custom_id.isdigit() else 0)
@@ -358,10 +329,8 @@ class BedrockProviderJobAdapter(ProviderJobAdapterInterface):
     @provider_error_handling
     async def cancel(self, batch_api_job: ProviderJob) -> BatchStatusInfo:
         """Cancel a batch job and wait until cancellation completes."""
-        job_id = batch_api_job.id.split("/")[-1] if "/" in batch_api_job.id else batch_api_job.id
-
         async with self._session.client("bedrock", **self._bedrock_kwargs) as bedrock:
-            await bedrock.stop_model_invocation_job(jobIdentifier=job_id)
+            await bedrock.stop_model_invocation_job(jobIdentifier=batch_api_job.id)
 
         # Poll until batch reaches a terminal state
         cancel_timeout_seconds = 60

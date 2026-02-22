@@ -30,12 +30,81 @@ from langasync.providers.interface import (
 )
 
 
+def _guess_mime_type(url: str) -> str:
+    """Guess MIME type from URL extension."""
+    path = url.lower().split("?")[0].split("#")[0]
+    if path.endswith(".png"):
+        return "image/png"
+    if path.endswith(".gif"):
+        return "image/gif"
+    if path.endswith(".webp"):
+        return "image/webp"
+    if path.endswith(".pdf"):
+        return "application/pdf"
+    return "image/jpeg"
+
+
+def _convert_content_part(part: dict) -> dict:
+    """Convert a single LangChain content part dict to Gemini format."""
+    part_type = part.get("type")
+
+    if part_type == "text":
+        return {"text": part["text"]}
+
+    if part_type == "image":
+        url = part["url"]
+        if url.startswith("data:"):
+            # data:image/jpeg;base64,/9j/4AAQ...
+            header, data = url.split(",", 1)
+            mime_type = header.split(":")[1].split(";")[0]
+            return {"inline_data": {"mime_type": mime_type, "data": data}}
+        return {"file_data": {"mime_type": _guess_mime_type(url), "file_uri": url}}
+
+    if part_type == "image_url":
+        url = part.get("image_url", {}).get("url", "")
+        if url.startswith("data:"):
+            header, data = url.split(",", 1)
+            mime_type = header.split(":")[1].split(";")[0]
+            return {"inline_data": {"mime_type": mime_type, "data": data}}
+        return {"file_data": {"mime_type": _guess_mime_type(url), "file_uri": url}}
+
+    if part_type == "file":
+        return {"inline_data": {"mime_type": part["mime_type"], "data": part["base64"]}}
+
+    # Already in Gemini format or unknown — pass through
+    return part
+
+
+def _convert_tools(openai_tools: list[dict]) -> list[dict]:
+    """Convert OpenAI-format tools to Gemini function_declarations format."""
+    declarations = []
+    for tool in openai_tools:
+        if tool.get("type") == "function":
+            func = tool["function"]
+            decl: dict[str, Any] = {"name": func["name"]}
+            if func.get("description"):
+                decl["description"] = func["description"]
+            if func.get("parameters"):
+                decl["parameters"] = func["parameters"]
+            declarations.append(decl)
+    if not declarations:
+        return []
+    return [{"function_declarations": declarations}]
+
+
 def _message_content_to_parts(content: str | list) -> list[dict]:
     """Convert LangChain message content to Gemini parts dicts."""
     if isinstance(content, str):
         return [{"text": content}]
-    # List content — pass through dicts, convert strings
-    return [{"text": p} if isinstance(p, str) else p for p in content]
+    parts = []
+    for p in content:
+        if isinstance(p, str):
+            parts.append({"text": p})
+        elif isinstance(p, dict):
+            parts.append(_convert_content_part(p))
+        else:
+            parts.append(p)
+    return parts
 
 
 def _convert_to_gemini_messages(
@@ -199,6 +268,13 @@ class GeminiProviderJobAdapter(ProviderJobAdapterInterface):
         model_name = self._get_model_name(language_model)
         model_config = self._get_model_config(language_model, model_bindings)
 
+        # Extract tools from config — they go at request level, not in generation_config
+        tools_config = None
+        raw_tools = model_config.pop("tools", None)
+        if raw_tools:
+            tools_config = _convert_tools(raw_tools)
+        tool_choice = model_config.pop("tool_choice", None)
+
         requests = []
         for i, inp in enumerate(inputs):
             system_instruction, contents = _convert_to_gemini_messages(inp)
@@ -207,6 +283,10 @@ class GeminiProviderJobAdapter(ProviderJobAdapterInterface):
                 request["system_instruction"] = system_instruction
             if model_config:
                 request["generation_config"] = model_config
+            if tools_config:
+                request["tools"] = tools_config
+            if tool_choice:
+                request["tool_config"] = {"function_calling_config": {"mode": tool_choice}}
             # key=str(i) correlates responses back to inputs by submission order
             requests.append({"request": request, "metadata": {"key": str(i)}})
 
@@ -361,9 +441,8 @@ class GeminiProviderJobAdapter(ProviderJobAdapterInterface):
         response.raise_for_status()
         batch_data = response.json()
 
-        output = batch_data.get("response", {}).get("output", {})
-        inlined = output.get("inlinedResponses", {})
-        responses = inlined.get("responses", [])
+        inlined = batch_data.get("response", {}).get("inlinedResponses", {})
+        responses = inlined.get("inlinedResponses", [])
 
         if not responses:
             return []

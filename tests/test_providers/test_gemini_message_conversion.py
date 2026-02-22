@@ -135,7 +135,7 @@ class TestConvertToGeminiMessages:
         assert len(result) == 2
 
     def test_image_url_content(self):
-        """HumanMessage with image URL is passed through as Gemini parts."""
+        """HumanMessage with image URL is converted to Gemini file_data format."""
         system, contents = _convert_to_gemini_messages(
             [
                 SystemMessage("You are helpful"),
@@ -152,10 +152,67 @@ class TestConvertToGeminiMessages:
             {
                 "role": "user",
                 "parts": [
-                    {"type": "text", "text": "Describe this image."},
-                    {"type": "image", "url": "https://example.com/cat.jpg"},
+                    {"text": "Describe this image."},
+                    {
+                        "file_data": {
+                            "mime_type": "image/jpeg",
+                            "file_uri": "https://example.com/cat.jpg",
+                        }
+                    },
                 ],
             },
+        ]
+
+    def test_image_url_png(self):
+        """Image URL with .png extension gets correct MIME type."""
+        system, contents = _convert_to_gemini_messages(
+            [HumanMessage(content=[{"type": "image", "url": "https://example.com/photo.png"}])]
+        )
+        assert contents[0]["parts"] == [
+            {"file_data": {"mime_type": "image/png", "file_uri": "https://example.com/photo.png"}},
+        ]
+
+    def test_image_data_uri(self):
+        """Image with data: URI is converted to inline_data."""
+        system, contents = _convert_to_gemini_messages(
+            [HumanMessage(content=[{"type": "image", "url": "data:image/png;base64,iVBOR"}])]
+        )
+        assert contents[0]["parts"] == [
+            {"inline_data": {"mime_type": "image/png", "data": "iVBOR"}},
+        ]
+
+    def test_openai_image_url_format(self):
+        """OpenAI-style image_url content is converted to Gemini format."""
+        system, contents = _convert_to_gemini_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "What's this?"},
+                        {"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}},
+                    ]
+                ),
+            ]
+        )
+        assert contents[0]["parts"] == [
+            {"text": "What's this?"},
+            {"file_data": {"mime_type": "image/jpeg", "file_uri": "https://example.com/img.jpg"}},
+        ]
+
+    def test_file_content(self):
+        """File content (e.g. PDF) is converted to inline_data."""
+        system, contents = _convert_to_gemini_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": "Summarize this."},
+                        {"type": "file", "base64": "JVBERi0x", "mime_type": "application/pdf"},
+                    ]
+                ),
+            ]
+        )
+        assert contents[0]["parts"] == [
+            {"text": "Summarize this."},
+            {"inline_data": {"mime_type": "application/pdf", "data": "JVBERi0x"}},
         ]
 
     def test_ai_message_with_tool_calls(self):

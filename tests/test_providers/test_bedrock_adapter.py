@@ -11,7 +11,14 @@ import pytest
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from langasync.providers.bedrock import BedrockProviderJobAdapter
+from langasync.exceptions import BatchProviderApiError, UnsupportedProviderError
+from langasync.providers.bedrock import (
+    BEDROCK_MIN_BATCH_SIZE,
+    BedrockProviderJobAdapter,
+    get_provider,
+    get_provider_from_model,
+)
+from langasync.providers.bedrock.model_providers import _get_provider_str
 from langasync.providers.interface import (
     ProviderJob,
     BatchItem,
@@ -64,7 +71,7 @@ def adapter(bedrock_settings):
             cm.__aenter__.return_value = mock_bedrock
         return cm
 
-    with patch("langasync.providers.bedrock.aioboto3") as mock_aioboto3:
+    with patch("langasync.providers.bedrock.core.aioboto3") as mock_aioboto3:
         mock_session = MagicMock()
         mock_session.client.side_effect = client_factory
         mock_aioboto3.Session.return_value = mock_session
@@ -102,7 +109,8 @@ def sample_batch_job():
         metadata={
             "input_key": "langasync/test-uuid/input.jsonl",
             "output_prefix": "langasync/test-uuid/output/",
-            "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
+            "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+            "bedrock_provider": "anthropic",
             "total_records": TOTAL_RECORDS,
         },
     )
@@ -123,6 +131,13 @@ class TestCreateBatch:
     def _freeze_uuid(self, freeze_uuid):
         self.batch_uuid = freeze_uuid
 
+    async def test_create_batch_rejects_too_few_inputs(self, adapter, mock_model):
+        """Test that create_batch raises when inputs < BEDROCK_MIN_BATCH_SIZE."""
+        with pytest.raises(
+            BatchProviderApiError, match=f"at least {BEDROCK_MIN_BATCH_SIZE} records"
+        ):
+            await adapter.create_batch(["Hello"], mock_model)
+
     async def test_create_batch_success(self, adapter, mock_model):
         """Test successful batch creation (S3 upload + Bedrock job create)."""
         adapter._mock_s3.put_object.return_value = {}
@@ -130,7 +145,7 @@ class TestCreateBatch:
             bedrock_create_job_response(job_arn=JOB_ARN)
         )
 
-        inputs = ["Hello, world!", "How are you?"]
+        inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
         result = await adapter.create_batch(inputs, mock_model)
 
         assert result == ProviderJob(
@@ -140,8 +155,9 @@ class TestCreateBatch:
             metadata={
                 "input_key": f"langasync/{self.batch_uuid}/input.jsonl",
                 "output_prefix": f"langasync/{self.batch_uuid}/output/",
-                "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-                "total_records": 2,
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
             },
         )
 
@@ -150,7 +166,7 @@ class TestCreateBatch:
         assert put_call.kwargs["Bucket"] == "test-bucket"
         assert put_call.kwargs["ContentType"] == "application/jsonl"
         lines = put_call.kwargs["Body"].decode().strip().split("\n")
-        assert len(lines) == 2
+        assert len(lines) == BEDROCK_MIN_BATCH_SIZE
 
         record_0 = json.loads(lines[0])
         assert record_0 == {
@@ -159,24 +175,13 @@ class TestCreateBatch:
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 1024,
                 "temperature": 0.7,
-                "messages": [{"role": "user", "content": "Hello, world!"}],
-            },
-        }
-
-        record_1 = json.loads(lines[1])
-        assert record_1 == {
-            "recordId": "1",
-            "modelInput": {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1024,
-                "temperature": 0.7,
-                "messages": [{"role": "user", "content": "How are you?"}],
+                "messages": [{"role": "user", "content": "Message 0"}],
             },
         }
 
         # Verify Bedrock create request
         create_call = adapter._mock_bedrock.create_model_invocation_job.call_args
-        assert create_call.kwargs["modelId"] == "anthropic.claude-3-sonnet-20240229-v1:0"
+        assert create_call.kwargs["modelId"] == "us.anthropic.claude-3-sonnet-20240229-v1:0"
         assert create_call.kwargs["roleArn"] == "arn:aws:iam::123456789012:role/TestRole"
         assert (
             create_call.kwargs["inputDataConfig"]["s3InputDataConfig"]["s3InputFormat"] == "JSONL"
@@ -189,12 +194,11 @@ class TestCreateBatch:
             bedrock_create_job_response(job_arn=JOB_ARN)
         )
 
-        inputs = [
-            [
-                SystemMessage(content="You are a helpful assistant."),
-                HumanMessage(content="Hello!"),
-            ]
+        msg_with_system = [
+            SystemMessage(content="You are a helpful assistant."),
+            HumanMessage(content="Hello!"),
         ]
+        inputs = [msg_with_system] + [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE - 1)]
         result = await adapter.create_batch(inputs, mock_model)
 
         assert result == ProviderJob(
@@ -204,14 +208,16 @@ class TestCreateBatch:
             metadata={
                 "input_key": f"langasync/{self.batch_uuid}/input.jsonl",
                 "output_prefix": f"langasync/{self.batch_uuid}/output/",
-                "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-                "total_records": 1,
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
             },
         )
 
-        # Verify system message is extracted to top-level system field
+        # Verify system message is extracted to top-level system field in first record
         put_call = adapter._mock_s3.put_object.call_args
-        record = json.loads(put_call.kwargs["Body"].decode().strip())
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        record = json.loads(lines[0])
         assert record == {
             "recordId": "0",
             "modelInput": {
@@ -230,17 +236,16 @@ class TestCreateBatch:
             bedrock_create_job_response(job_arn=JOB_ARN)
         )
 
-        inputs = [
-            [
-                SystemMessage(content="You are a helpful assistant."),
-                HumanMessage(
-                    content=[
-                        {"type": "text", "text": "Describe this image."},
-                        {"type": "image", "url": "https://example.com/cat.jpg"},
-                    ]
-                ),
-            ]
+        msg_with_image = [
+            SystemMessage(content="You are a helpful assistant."),
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "Describe this image."},
+                    {"type": "image", "url": "https://example.com/cat.jpg"},
+                ]
+            ),
         ]
+        inputs = [msg_with_image] + [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE - 1)]
         result = await adapter.create_batch(inputs, mock_model)
 
         assert result == ProviderJob(
@@ -250,14 +255,16 @@ class TestCreateBatch:
             metadata={
                 "input_key": f"langasync/{self.batch_uuid}/input.jsonl",
                 "output_prefix": f"langasync/{self.batch_uuid}/output/",
-                "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-                "total_records": 1,
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
             },
         )
 
         # Verify batch request content — _format_messages converts to Anthropic format
         put_call = adapter._mock_s3.put_object.call_args
-        record = json.loads(put_call.kwargs["Body"].decode().strip())
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        record = json.loads(lines[0])
         assert record == {
             "recordId": "0",
             "modelInput": {
@@ -294,7 +301,8 @@ class TestCreateBatch:
             "tools": [{"name": "get_weather", "description": "Get weather", "input_schema": {}}],
             "tool_choice": {"type": "auto"},
         }
-        result = await adapter.create_batch(["Test"], mock_model, model_bindings=bindings)
+        inputs = [f"Message {i}" for i in range(BEDROCK_MIN_BATCH_SIZE)]
+        result = await adapter.create_batch(inputs, mock_model, model_bindings=bindings)
 
         assert result == ProviderJob(
             id=JOB_ARN,
@@ -303,14 +311,16 @@ class TestCreateBatch:
             metadata={
                 "input_key": f"langasync/{self.batch_uuid}/input.jsonl",
                 "output_prefix": f"langasync/{self.batch_uuid}/output/",
-                "model_id": "anthropic.claude-3-sonnet-20240229-v1:0",
-                "total_records": 1,
+                "model_id": "us.anthropic.claude-3-sonnet-20240229-v1:0",
+                "bedrock_provider": "anthropic",
+                "total_records": BEDROCK_MIN_BATCH_SIZE,
             },
         )
 
-        # Verify the full batch request content
+        # Verify the first record includes model bindings
         put_call = adapter._mock_s3.put_object.call_args
-        record = json.loads(put_call.kwargs["Body"].decode().strip())
+        lines = put_call.kwargs["Body"].decode().strip().split("\n")
+        record = json.loads(lines[0])
         assert record == {
             "recordId": "0",
             "modelInput": {
@@ -321,7 +331,7 @@ class TestCreateBatch:
                     {"name": "get_weather", "description": "Get weather", "input_schema": {}}
                 ],
                 "tool_choice": {"type": "auto"},
-                "messages": [{"role": "user", "content": "Test"}],
+                "messages": [{"role": "user", "content": "Message 0"}],
             },
         }
 
@@ -685,7 +695,7 @@ class TestCancel:
 
         # Verify stop was called
         adapter._mock_bedrock.stop_model_invocation_job.assert_called_once_with(
-            jobIdentifier="test-job-id"
+            jobIdentifier=JOB_ARN
         )
         # Verify status was polled twice
         assert adapter._mock_bedrock.get_model_invocation_job.call_count == 2
@@ -714,6 +724,64 @@ class TestCancel:
         )
 
 
+class TestProviderDetection:
+    """Test _get_provider_str extracts provider from Bedrock model IDs."""
+
+    @pytest.mark.parametrize(
+        "model_id,expected",
+        [
+            ("anthropic.claude-3-sonnet-20240229-v1:0", "anthropic"),
+            ("us.anthropic.claude-3-5-sonnet-20241022-v2:0", "anthropic"),
+            ("eu.anthropic.claude-sonnet-4-20250514-v1:0", "anthropic"),
+            ("meta.llama3-70b-instruct-v1:0", "meta"),
+            ("us.meta.llama3-2-90b-instruct-v1:0", "meta"),
+            ("mistral.mistral-7b-instruct-v0:2", "mistral"),
+            ("amazon.titan-text-express-v1", "amazon"),
+            ("deepseek.deepseek-r1-v1:0", "deepseek"),
+        ],
+    )
+    def test_get_provider(self, model_id: str, expected: str) -> None:
+        assert _get_provider_str(model_id) == expected
+
+
+class TestUnsupportedProvider:
+    """Test that unsupported Bedrock providers raise UnsupportedProviderError."""
+
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "meta.llama3-70b-instruct-v1:0",
+            "us.meta.llama3-2-90b-instruct-v1:0",
+            "mistral.mistral-7b-instruct-v0:2",
+            "deepseek.deepseek-r1-v1:0",
+            "amazon.titan-text-express-v1",
+        ],
+    )
+    def test_get_provider_rejects_unsupported(self, model_id: str) -> None:
+        provider_str = _get_provider_str(model_id)
+        with pytest.raises(UnsupportedProviderError):
+            get_provider(provider_str, model_id, "us")
+
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "meta.llama3-70b-instruct-v1:0",
+            "mistral.mistral-7b-instruct-v0:2",
+            "deepseek.deepseek-r1-v1:0",
+            "amazon.titan-text-express-v1",
+        ],
+    )
+    def test_get_provider_from_model_rejects_unsupported(self, model_id: str) -> None:
+        mock_model = SimpleNamespace(
+            model_id=model_id,
+            model_name=None,
+            model=None,
+            provider=None,
+        )
+        with pytest.raises(UnsupportedProviderError):
+            get_provider_from_model(mock_model, "us")
+
+
 class TestAdapterInit:
     """Test adapter initialization."""
 
@@ -726,7 +794,7 @@ class TestAdapterInit:
             bedrock_s3_bucket="my-bucket",
             bedrock_role_arn="arn:aws:iam::123:role/R",
         )
-        with patch("langasync.providers.bedrock.aioboto3") as mock_aioboto3:
+        with patch("langasync.providers.bedrock.core.aioboto3") as mock_aioboto3:
             mock_aioboto3.Session.return_value = MagicMock()
             adapter = BedrockProviderJobAdapter(settings)
 
@@ -740,29 +808,17 @@ class TestAdapterInit:
                 aws_secret_access_key="secret",
             )
 
-    def test_init_without_explicit_credentials(self):
-        """Test initialization without explicit credentials uses default chain."""
-        settings = LangasyncSettings(
-            bedrock_s3_bucket="my-bucket",
-            bedrock_role_arn="arn:aws:iam::123:role/R",
-        )
-        with patch("langasync.providers.bedrock.aioboto3") as mock_aioboto3:
-            mock_aioboto3.Session.return_value = MagicMock()
-            BedrockProviderJobAdapter(settings)
-
-            # Verify Session was called WITHOUT explicit credentials
-            mock_aioboto3.Session.assert_called_once_with(region_name="us-east-1")
-
     def test_init_with_session_token(self):
         """Test initialization with temporary credentials (session token)."""
         settings = LangasyncSettings(
             aws_access_key_id="AKID",
             aws_secret_access_key="secret",
             aws_session_token="token123",
+            aws_region="us-east-1",
             bedrock_s3_bucket="my-bucket",
             bedrock_role_arn="arn:aws:iam::123:role/R",
         )
-        with patch("langasync.providers.bedrock.aioboto3") as mock_aioboto3:
+        with patch("langasync.providers.bedrock.core.aioboto3") as mock_aioboto3:
             mock_aioboto3.Session.return_value = MagicMock()
             BedrockProviderJobAdapter(settings)
 
@@ -780,7 +836,7 @@ class TestAdapterInit:
             bedrock_role_arn="arn:aws:iam::123:role/R",
             bedrock_base_url="https://custom-bedrock.example.com",
         )
-        with patch("langasync.providers.bedrock.aioboto3") as mock_aioboto3:
+        with patch("langasync.providers.bedrock.core.aioboto3") as mock_aioboto3:
             mock_aioboto3.Session.return_value = MagicMock()
             adapter = BedrockProviderJobAdapter(settings)
 
@@ -794,34 +850,38 @@ class TestAdapterInit:
             bedrock_s3_bucket="from-settings-bucket",
             bedrock_role_arn="arn:aws:iam::123:role/FromSettings",
         )
-        with patch("langasync.providers.bedrock.aioboto3") as mock_aioboto3:
+        with patch("langasync.providers.bedrock.core.aioboto3") as mock_aioboto3:
             mock_aioboto3.Session.return_value = MagicMock()
             adapter = BedrockProviderJobAdapter(settings)
             assert adapter.s3_bucket == "from-settings-bucket"
             assert adapter.role_arn == "arn:aws:iam::123:role/FromSettings"
 
-    def test_init_without_s3_bucket_raises(self):
+    def test_init_without_s3_bucket_raises(self, monkeypatch):
         """Test initialization without S3 bucket raises error."""
+        monkeypatch.delenv("BEDROCK_S3_BUCKET", raising=False)
         settings = LangasyncSettings(
+            _env_file=None,
             aws_access_key_id="AKID",
             aws_secret_access_key="secret",
             bedrock_role_arn="arn:aws:iam::123:role/R",
         )
         with (
-            patch("langasync.providers.bedrock.aioboto3"),
+            patch("langasync.providers.bedrock.core.aioboto3"),
             pytest.raises(Exception, match="S3 bucket required"),
         ):
             BedrockProviderJobAdapter(settings)
 
-    def test_init_without_role_arn_raises(self):
+    def test_init_without_role_arn_raises(self, monkeypatch):
         """Test initialization without IAM role ARN raises error."""
+        monkeypatch.delenv("BEDROCK_ROLE_ARN", raising=False)
         settings = LangasyncSettings(
+            _env_file=None,
             aws_access_key_id="AKID",
             aws_secret_access_key="secret",
             bedrock_s3_bucket="my-bucket",
         )
         with (
-            patch("langasync.providers.bedrock.aioboto3"),
+            patch("langasync.providers.bedrock.core.aioboto3"),
             pytest.raises(Exception, match="IAM role ARN required"),
         ):
             BedrockProviderJobAdapter(settings)

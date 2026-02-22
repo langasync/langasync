@@ -1,5 +1,14 @@
-from pydantic import Field
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BEDROCK_REGION_GEO_PREFIXES = {
+    "us": "us",
+    "eu": "eu",
+    "ap": "apac",
+    "ca": "us",
+    "me": "apac",
+    "il": "eu",
+}
 
 
 class LangasyncSettings(BaseSettings):
@@ -30,6 +39,18 @@ class LangasyncSettings(BaseSettings):
     bedrock_s3_bucket: str | None = Field(default=None, validation_alias="BEDROCK_S3_BUCKET")
     bedrock_role_arn: str | None = Field(default=None, validation_alias="BEDROCK_ROLE_ARN")
     bedrock_base_url: str | None = Field(default=None, validation_alias="BEDROCK_BASE_URL")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def bedrock_region_prefix(self) -> str:
+        """Cross-region inference profile prefix derived from aws_region (e.g. 'us', 'eu', 'apac')."""
+        geo = self.aws_region.split("-")[0]
+        if geo not in _BEDROCK_REGION_GEO_PREFIXES:
+            raise ValueError(
+                f"Cannot determine Bedrock cross-region prefix for region '{self.aws_region}'. "
+                f"Supported region prefixes: {sorted(_BEDROCK_REGION_GEO_PREFIXES.keys())}"
+            )
+        return _BEDROCK_REGION_GEO_PREFIXES[geo]
 
     # Langasync-specific settings — use LANGASYNC_ prefix
     batch_poll_interval: float = Field(
