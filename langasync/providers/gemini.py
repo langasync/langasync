@@ -422,10 +422,18 @@ class GeminiProviderJobAdapter(ProviderJobAdapterInterface):
         candidate = candidates[0]
         content_parts = candidate.get("content", {}).get("parts", [])
 
-        # Match LangChain's ChatGoogleGenerativeAI behavior:
-        # single text -> string, tool calls -> extracted, multiple parts -> list
+        # Match LangChain's ChatGoogleGenerativeAI _parse_response_candidate behavior:
+        # Convert REST API parts to LangChain content format, extract tool calls,
+        # and handle thinking parts.
         tool_calls: list[ToolCall] = []
+        content: list[str | dict] = []
+
         for part in content_parts:
+            if part.get("thought") and "text" in part:
+                content.append({"type": "thinking", "thinking": part["text"]})
+            elif "text" in part:
+                content.append(part["text"])
+
             fc = part.get("functionCall")
             if fc:
                 tool_calls.append(
@@ -436,12 +444,15 @@ class GeminiProviderJobAdapter(ProviderJobAdapterInterface):
                     )
                 )
 
+        # Single text string -> unwrap; tool calls or mixed -> list content
         if tool_calls:
-            ai_message = AIMessage(content=content_parts, tool_calls=tool_calls)
-        elif len(content_parts) == 1 and "text" in content_parts[0]:
-            ai_message = AIMessage(content=content_parts[0]["text"])
+            ai_message = AIMessage(content=content or "", tool_calls=tool_calls)
+        elif len(content) == 1 and isinstance(content[0], str):
+            ai_message = AIMessage(content=content[0])
+        elif content:
+            ai_message = AIMessage(content=content)
         else:
-            ai_message = AIMessage(content=content_parts)
+            ai_message = AIMessage(content="")
 
         usage_metadata = response_data.get("usageMetadata", {})
         usage = None

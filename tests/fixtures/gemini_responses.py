@@ -167,6 +167,46 @@ def gemini_tool_call_inline_result(
     }
 
 
+def gemini_thinking_inline_result(
+    key: str,
+    thinking_text: str = "Let me think about this...",
+    answer_text: str = "The answer is 42.",
+    prompt_tokens: int = 10,
+    completion_tokens: int = 15,
+) -> dict[str, Any]:
+    """Factory for a response with thinking parts in Gemini batch results.
+
+    Used by: response.output.inlinedResponses.responses[]
+    """
+    candidate = {
+        "content": {
+            "parts": [
+                {"text": thinking_text, "thought": True},
+                {"text": answer_text},
+            ],
+            "role": "model",
+        },
+        "finishReason": "STOP",
+        "index": 0,
+    }
+    validate_gemini_candidate(candidate)
+
+    response = {
+        "candidates": [candidate],
+        "usageMetadata": {
+            "promptTokenCount": prompt_tokens,
+            "candidatesTokenCount": completion_tokens,
+            "totalTokenCount": prompt_tokens + completion_tokens,
+        },
+    }
+    validate_gemini_response(response)
+
+    return {
+        "metadata": {"key": key},
+        "response": response,
+    }
+
+
 def gemini_error_result(
     key: str,
     error_code: int = 13,
