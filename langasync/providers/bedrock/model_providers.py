@@ -9,12 +9,12 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable
 
-from langchain_anthropic.chat_models import _format_messages
 from langchain_anthropic.output_parsers import extract_tool_calls
 from langchain_aws.function_calling import convert_to_anthropic_tool
 from langchain_core.messages import AIMessage, BaseMessage
 
 from langasync.exceptions import UnsupportedProviderError
+from langasync.providers.anthropic import format_anthropic_messages
 from langasync.providers.interface import BatchItem, LanguageModelType
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class AnthropicBedrockProvider(BedrockModelProvider):
         self,
         messages: list[BaseMessage],
     ) -> dict[str, Any]:
-        system, formatted = _format_messages(messages)  # type: ignore[arg-type]
+        system, formatted = format_anthropic_messages(messages)
         model_input: dict[str, Any] = {"messages": formatted}
         if system:
             model_input["system"] = system
