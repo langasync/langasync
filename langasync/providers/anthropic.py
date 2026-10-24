@@ -1,6 +1,7 @@
 """Anthropic Message Batches API adapter."""
 
 import asyncio
+import inspect
 import json
 import logging
 from datetime import datetime
@@ -29,6 +30,19 @@ from langasync.providers.interface import (
     Provider,
 )
 
+# _format_messages gained a required ``model`` kwarg in langchain-anthropic
+# 1.7.3; our range (>=1.0,<1.8) spans both. ``model`` only affects warning text.
+_FORMAT_MESSAGES_ACCEPTS_MODEL = "model" in inspect.signature(_format_messages).parameters
+
+
+def format_anthropic_messages(
+    messages: Any,
+) -> tuple[str | list[dict] | None, list[dict]]:
+    """Call langchain's ``_format_messages`` regardless of installed version."""
+    if _FORMAT_MESSAGES_ACCEPTS_MODEL:
+        return _format_messages(messages, model=None)  # type: ignore[call-arg]
+    return _format_messages(messages)  # type: ignore[call-arg]
+
 
 def custom_convert_to_anthropic_messages(
     inp: LanguageModelInput,
@@ -46,7 +60,7 @@ def custom_convert_to_anthropic_messages(
         inp = [inp]
 
     # Use LangChain's _format_messages to convert
-    system, messages = _format_messages(inp)  # type: ignore[arg-type]
+    system, messages = format_anthropic_messages(inp)
     return system, messages
 
 
